@@ -6980,6 +6980,7 @@ dependencies = [
  "toml 0.8.23",
  "tray-icon",
  "windows 0.62.2",
+ "windows-core 0.62.2",
 ]
 
 [[package]]

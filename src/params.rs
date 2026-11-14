@@ -34,6 +34,14 @@ pub struct Params {
     /// "Remove headphone echo": read by the controller each tick; echo removal runs
     /// only while this is on and headphones are picked (see `echo.rs`). Off by default.
     pub echo: AtomicBool,
+    /// "App through mic": mix the picked app's sound in (see `appaudio.rs`). The
+    /// controller runs the capture only while this is on and an app is picked.
+    pub app: AtomicBool,
+    /// Mute silences only your voice; the app keeps playing. Off by default (mute
+    /// silences everything, like muting in Discord).
+    pub app_mute_keep: AtomicBool,
+    /// The app's level in the mix, 0.0..=1.0 (linear gain, f32 bits).
+    app_volume: AtomicU32,
     /// EQ band gains in dB: body, mud, presence (f32 bits).
     eq_gains: [AtomicU32; 3],
     /// Which preset those gains came from (`EqPreset as u8`), for display.
@@ -103,6 +111,11 @@ impl EqPreset {
 /// Custom EQ band range (dB).
 pub const EQ_DB_LIMIT: f32 = 6.0;
 
+/// The app's default level in the mix: 20%, which is a gain of 0.04 (−28 dB; see
+/// `app_gain`). A song from Spotify came in at −5…−14 dBFS while your voice sits near
+/// −23 dB after auto gain; in the live Discord test friends liked a gain of 0.03.
+pub const APP_VOLUME_DEFAULT: f32 = 0.2;
+
 pub const GATE_DB_MIN: f32 = -80.0;
 pub const GATE_DB_MAX: f32 = -10.0;
 /// Chosen from the user's listening test (fifine mic): -50 let keyboard clicks
@@ -136,6 +149,9 @@ impl Params {
             eq: AtomicBool::new(true),
             hide_from_share: AtomicBool::new(true),
             echo: AtomicBool::new(false),
+            app: AtomicBool::new(false),
+            app_mute_keep: AtomicBool::new(false),
+            app_volume: AtomicU32::new(APP_VOLUME_DEFAULT.to_bits()),
             eq_gains: [const { AtomicU32::new(0) }; 3], // 0u32 is 0.0f32: Natural
             eq_preset: AtomicU8::new(EqPreset::Natural as u8),
         }
@@ -152,6 +168,27 @@ impl Params {
             1.0
         };
         self.strength.store(v.to_bits(), Relaxed);
+    }
+
+    /// The app's level as the slider shows it, 0..=1.
+    pub fn app_volume(&self) -> f32 {
+        f32::from_bits(self.app_volume.load(Relaxed))
+    }
+
+    /// The gain applied to the app: the level squared, so the slider moves evenly by
+    /// ear (the useful levels are quiet ones: 20% = 0.04, 50% = 0.25).
+    pub fn app_gain(&self) -> f32 {
+        let v = self.app_volume();
+        v * v
+    }
+
+    pub fn set_app_volume(&self, v: f32) {
+        let v = if v.is_finite() {
+            v.clamp(0.0, 1.0)
+        } else {
+            APP_VOLUME_DEFAULT
+        };
+        self.app_volume.store(v.to_bits(), Relaxed);
     }
 
     pub fn gate_threshold_db(&self) -> f32 {
@@ -244,5 +281,12 @@ mod tests {
         p.set_eq_custom([9.0, f32::NAN, -2.0]);
         assert_eq!(p.eq_gains(), [6.0, 0.0, -2.0]);
         assert_eq!(p.eq_preset(), EqPreset::Custom);
+        assert_eq!(p.app_volume(), APP_VOLUME_DEFAULT);
+        p.set_app_volume(0.5);
+        assert_eq!(p.app_gain(), 0.25);
+        p.set_app_volume(3.0);
+        assert_eq!(p.app_volume(), 1.0);
+        p.set_app_volume(f32::NAN);
+        assert_eq!(p.app_volume(), APP_VOLUME_DEFAULT);
     }
 }

@@ -80,6 +80,10 @@ pub struct Stats {
     pub voice_db: AtomicU32,
     /// The headphones loopback (echo reference) stream failed.
     pub echo_failed: AtomicBool,
+    /// The "App through mic" capture ended on its own (the app exited).
+    pub app_failed: AtomicBool,
+    /// Loudest app frame in the mix since the last read, (dB + 120) × 100; 0 = none.
+    app_cdb: AtomicU32,
     /// Echo removed right now (AEC3's ERLE) in hundredths of a dB, and its
     /// headphones → mic delay in ms; `i32::MIN` = not known / echo removal off.
     pub echo_erle_cdb: AtomicI32,
@@ -136,6 +140,8 @@ impl Stats {
             speech_frames: AtomicU64::new(0),
             voice_db: AtomicU32::new(crate::dsp::AGC_TARGET_DB.to_bits()),
             echo_failed: AtomicBool::new(false),
+            app_failed: AtomicBool::new(false),
+            app_cdb: AtomicU32::new(0),
             echo_erle_cdb: AtomicI32::new(i32::MIN),
             echo_delay_ms: AtomicI32::new(i32::MIN),
             loud_e: Default::default(),
@@ -189,6 +195,10 @@ impl Stats {
             self.speech_frames.fetch_add(1, Relaxed);
         }
         self.voice_db.store(info.voice_db.to_bits(), Relaxed);
+        if info.app_db > -120.0 {
+            let cdb = ((info.app_db.min(0.0) + 120.0) * 100.0) as u32;
+            self.app_cdb.fetch_max(cdb, Relaxed);
+        }
         let loud = crate::dsp::db_to_lin(LOUD_DB);
         if info.e_stages[0] >= loud * loud * crate::denoise::FRAME as f32 {
             for (acc, e) in self.loud_e.iter().zip(info.e_stages) {
@@ -220,6 +230,13 @@ impl Stats {
             let db = |a: f32, b: f32| 10.0 * (b.max(1e-12) / a.max(1e-12)).log10();
             (n, [db(e[0], e[1]), db(e[1], e[2]), db(e[2], e[3])])
         })
+    }
+
+    /// Main thread: the loudest the app was in the mix since the last call (RMS of a
+    /// 10 ms frame, dBFS), if it played at all. Resets.
+    pub fn take_app_db(&self) -> Option<f32> {
+        let v = self.app_cdb.swap(0, Relaxed);
+        (v > 0).then(|| v as f32 / 100.0 - 120.0)
     }
 
     /// Main thread: start (or restart) a tuning measurement with empty histograms.

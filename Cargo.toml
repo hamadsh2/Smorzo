@@ -32,7 +32,11 @@ self_update = { version = "1.3.3", default-features = false, features = ["ureq",
 sonora = "0.3.0"
 # Exclusive-mode output to CABLE Input ("Hide my voice from screen shares"). Same
 # version and features cpal 0.18.2 already builds, so it adds no new code to compile.
-windows = { version = "0.62", features = ["Win32_Media_Audio", "Win32_Foundation", "Win32_Media_KernelStreaming", "Win32_Media_Multimedia", "Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_System_Threading"] }
+windows = { version = "0.62", features = ["Win32_Media_Audio", "Win32_Foundation", "Win32_Media_KernelStreaming", "Win32_Media_Multimedia", "Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_System_Threading", "Win32_System_Variant", "Win32_Security", "Win32_System_Diagnostics_ToolHelp"] }
+# The core of `windows` (same version, already built into Sotto): needed by its
+# `#[implement]` macro, used once in `appaudio.rs` ("App through mic"). User-approved
+# 2026-11-14.
+windows-core = "=0.62.2"
 
 # Debug builds (plain `cargo build` / `cargo test`): tract's debug-only graph check
 # rejects the DeepFilterNet3 model ("duplicate name /convt3/Conv.bias" after codegen;

@@ -4,6 +4,17 @@ All notable changes to Sotto. Versions follow [Semantic Versioning](https://semv
 
 ## [Unreleased]
 
+### Added
+- **App through mic** (off by default): mix one app's sound (music, a soundboard, a video)
+  into your voice, so your friends hear it with you. The apps playing sound show up on the
+  main screen with their icons: one click picks an app and turns it on, and its level sits
+  right below. The level changes only what your friends hear. Sotto copies just that app's sound, read-only; it opens no stream on any device and
+  plays nothing. Discord, Teams, Zoom and Sotto itself can't be picked. Mute silences the
+  app too, unless you turn on **Mute keeps the app playing**.
+
+### Changed
+- **Hear yourself** records only your voice, never the app's sound.
+
 ## [0.3.0] - 2026-11-14
 
 ### Added

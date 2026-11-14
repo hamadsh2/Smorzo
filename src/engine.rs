@@ -86,6 +86,9 @@ enum WorkerMsg {
     /// Start (Some) or stop (None) echo removal; the old one comes back on
     /// `retired_echo`.
     Echo(Option<Box<EchoRef>>),
+    /// Start (Some) or stop (None) mixing an app in; the old one comes back on
+    /// `retired_app`.
+    App(Option<crate::appaudio::AppMix>),
     Quit,
 }
 
@@ -101,6 +104,8 @@ pub struct Worker {
     pub recorded: mpsc::Receiver<HeapProd<f32>>,
     /// Echo cancellers the worker no longer uses (freed on the main thread).
     pub retired_echo: mpsc::Receiver<Box<EchoRef>>,
+    /// App mixers the worker no longer uses (their rings are freed on the main thread).
+    pub retired_app: mpsc::Receiver<crate::appaudio::AppMix>,
 }
 
 #[link(name = "kernel32")]
@@ -122,6 +127,7 @@ impl Worker {
         let (ret_tx, retired) = mpsc::channel::<EngineSlot>();
         let (rec_tx, recorded) = mpsc::channel::<HeapProd<f32>>();
         let (echo_tx, retired_echo) = mpsc::channel::<Box<EchoRef>>();
+        let (app_tx, retired_app) = mpsc::channel::<crate::appaudio::AppMix>();
         let thread = thread::Builder::new()
             .name("sotto-denoise".into())
             .spawn(move || {
@@ -198,6 +204,12 @@ impl Worker {
                             stats.echo_publish(None);
                             continue;
                         }
+                        Ok(WorkerMsg::App(m)) => {
+                            if let Some(old) = chain.set_app(m) {
+                                let _ = app_tx.send(old);
+                            }
+                            continue;
+                        }
                         Ok(WorkerMsg::Quit) | Err(mpsc::TryRecvError::Disconnected) => return,
                         Err(mpsc::TryRecvError::Empty) => {}
                     }
@@ -222,10 +234,11 @@ impl Worker {
                             } else {
                                 stats.overflows.fetch_add(1, Relaxed);
                             }
-                            // A copy for "Hear yourself" (the ring was allocated on the
-                            // main thread; pushing into it only copies).
+                            // A copy for "Hear yourself": your voice only, never the
+                            // app mixed in (the ring was allocated on the main thread;
+                            // pushing into it only copies).
                             if let Some(r) = rec.as_mut() {
-                                r.push_slice(&clean);
+                                r.push_slice(chain.voice());
                                 if r.is_full()
                                     && let Some(full) = rec.take()
                                 {
@@ -254,6 +267,7 @@ impl Worker {
             retired,
             recorded,
             retired_echo,
+            retired_app,
         })
     }
 
@@ -271,6 +285,13 @@ impl Worker {
     pub fn set_echo(&self, e: Option<Box<EchoRef>>) -> Result<(), String> {
         self.tx
             .send(WorkerMsg::Echo(e))
+            .map_err(|_| "denoise thread is not running".to_string())
+    }
+
+    /// Hand an app mixer to the worker (`None` stops mixing).
+    pub fn set_app(&self, m: Option<crate::appaudio::AppMix>) -> Result<(), String> {
+        self.tx
+            .send(WorkerMsg::App(m))
             .map_err(|_| "denoise thread is not running".to_string())
     }
 

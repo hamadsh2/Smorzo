@@ -64,6 +64,31 @@ delete that folder to remove them too.
 
 </details>
 
+## Music through your mic
+
+**App through mic** (off by default) mixes one app's sound into your voice, so your
+friends hear your music, a soundboard or a video along with you. The apps playing sound
+show up on the main screen with their icons: click one to mix it in, and set its level
+right there.
+
+- The level only changes what your friends hear. Your own volume doesn't change.
+- **Mute** silences your voice and the app. Turn on *Mute keeps the app playing* to mute
+  only your voice. Muting yourself in Discord always silences both.
+- Discord can't be picked (your friends would hear themselves), and neither can Teams,
+  Zoom or Sotto itself. Don't pick a browser that has your call open, for the same reason.
+
+For the best result in Discord:
+
+- Use **Voice Activity**, not Push to Talk, so the music isn't cut while you're quiet.
+- Set Discord's **Noise Suppression** to None. Krisp removes music as "noise", and Sotto
+  already cleans your voice.
+- If your Spotify account is linked to Discord, Discord pauses Spotify after about 30
+  seconds of your mic sending sound, which with App through mic is all the time. To keep
+  it playing, remove Spotify under *User Settings → Connections* in Discord, or play your
+  music in another app.
+- **Share a window** instead of your whole screen. A whole-screen share sends the app's
+  sound too, so viewers would hear it twice.
+
 ## Your audio stays yours
 
 Sotto carries your voice through exactly **two** devices: the microphone you choose and VB-Cable's **CABLE Input**.
@@ -77,6 +102,10 @@ Sotto carries your voice through exactly **two** devices: the microphone you cho
   the headphones you pick, read-only, to know what they're playing and subtract the part
   that leaks into your mic. It never plays anything to them, never changes their settings,
   and keeps nothing it hears. If they're unplugged, echo removal pauses until they're back.
+- **App through mic** (off by default): Sotto *copies* the sound of the one app you pick
+  (and the windows it opens), read-only, into its output to CABLE Input. It opens no
+  stream on any device, plays nothing anywhere, and keeps nothing. If the app closes,
+  mixing pauses until it's back; Sotto never switches to another app.
 - It **never changes Windows sound settings**: not your default devices, volume, formats or enhancements.
 - Your **mic is opened in shared mode**, so other apps can still use it.
 - **Hide my voice from screen shares** (on by default): Sotto plays into CABLE Input in

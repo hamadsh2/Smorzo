@@ -453,8 +453,11 @@ pub struct FrameInfo {
     /// The auto gain's measured voice level, before its gain, dB.
     pub voice_db: f32,
     /// Sum of squares of this frame at each stage (for the per-stage loss readout):
-    /// after the high-pass, after echo removal, after denoise, and the final output.
+    /// after the high-pass, after echo removal, after denoise, and the final output
+    /// (your voice only, without the app).
     pub e_stages: [f32; 4],
+    /// The app's level in this frame's mix (RMS, dBFS; −120 = none).
+    pub app_db: f32,
 }
 
 /// A denoise engine plus the dry-path delay matched to its latency, so the strength
@@ -525,6 +528,16 @@ pub struct Chain {
     lim: Limiter,
     /// Echo removal (AEC3 + headphones reference), when on. See `echo.rs`.
     echo: Option<Box<crate::echo::EchoRef>>,
+    /// "App through mic": the picked app's sound, when on. See `appaudio.rs`.
+    app: Option<crate::appaudio::AppMix>,
+    app_buf: [f32; FRAME],
+    /// This frame's output without the app: your voice only. "Hear yourself" records
+    /// this, so a clip never holds the captured app's sound.
+    voice: [f32; FRAME],
+    /// The app's level (its volume, faded) and its mute (follows mute unless "Mute
+    /// keeps the app playing").
+    app_amt: Ramp,
+    app_live: Ramp,
     engine: EngineSlot,
     switch: Option<Switch>,
     /// The engine replaced by the last finished switch, waiting to be handed back to
@@ -561,6 +574,11 @@ impl Chain {
             agc: Agc::new(),
             lim: Limiter::new(),
             echo: None,
+            app: None,
+            app_buf: [0.0; FRAME],
+            voice: [0.0; FRAME],
+            app_amt: Ramp::new(0.0, 50.0),
+            app_live: Ramp::new(1.0 - on(p.muted.load(Relaxed)), 10.0),
             engine,
             switch: None,
             retired: None,
@@ -625,6 +643,18 @@ impl Chain {
         self.echo.as_deref()
     }
 
+    /// Start or stop mixing an app in; returns the previous one (to free off the audio
+    /// path). The app fades in from silence.
+    pub fn set_app(
+        &mut self,
+        m: Option<crate::appaudio::AppMix>,
+    ) -> Option<crate::appaudio::AppMix> {
+        if m.is_some() {
+            self.app_amt = Ramp::new(0.0, 50.0);
+        }
+        std::mem::replace(&mut self.app, m)
+    }
+
     /// The engine replaced by a finished switch, if any.
     pub fn take_retired(&mut self) -> Option<EngineSlot> {
         self.retired.take()
@@ -649,6 +679,11 @@ impl Chain {
 
     /// Process one frame. No allocation, no locks, no I/O (the DeepFilterNet engine
     /// waits a bounded time for its own thread; see `dfn.rs`).
+    /// The last processed frame without the app mixed in (your voice only).
+    pub fn voice(&self) -> &[f32; FRAME] {
+        &self.voice
+    }
+
     pub fn process(
         &mut self,
         input: &[f32; FRAME],
@@ -750,16 +785,49 @@ impl Chain {
             *x *= 1.0 + (g - 1.0) * self.agc_amt.next(agc_on);
         }
 
-        // 5. Limiter (last), then mute, then a hard safety clamp to the valid range.
-        // Mute is a 10 ms fade after everything else, so every stage keeps running
-        // (and stays settled) while muted and unmuting is instant and click-free.
-        let mut min_gain = 1.0f32;
-        for (y, x) in out.iter_mut().zip(&self.b) {
-            let g = self.lim.process(*x);
+        // 5. Mute, the app's sound ("App through mic"), then the limiter (last) and a
+        // hard safety clamp to the valid range. Mute is a 10 ms fade after every voice
+        // stage, so they keep running (and stay settled) while muted and unmuting is
+        // instant and click-free. The app comes in after the gate and auto gain (so
+        // neither reacts to the music) and before the limiter (so voice + music can't
+        // clip). It follows mute unless "Mute keeps the app playing" is on.
+        let app_vol = if p.app.load(Relaxed) && self.app.is_some() {
+            p.app_gain()
+        } else {
+            0.0
+        };
+        let app_live = if p.app_mute_keep.load(Relaxed) {
+            1.0
+        } else {
+            live
+        };
+        match self.app.as_mut() {
+            Some(m) => m.next(&mut self.app_buf),
+            None => self.app_buf.fill(0.0),
+        }
+        let (mut min_gain, mut e_voice, mut e_app) = (1.0f32, 0.0f32, 0.0f32);
+        for (((y, vo), x), a) in out
+            .iter_mut()
+            .zip(self.voice.iter_mut())
+            .zip(&self.b)
+            .zip(&self.app_buf)
+        {
+            let v = x * self.live.next(live);
+            let a = a * self.app_amt.next(app_vol) * self.app_live.next(app_live);
+            let m = v + a;
+            let g = self.lim.process(m);
             let g = 1.0 + (g - 1.0) * self.lim_amt.next(lim_on);
             min_gain = min_gain.min(g);
-            let v = x * g * self.live.next(live);
-            *y = if v.is_nan() { 0.0 } else { v.clamp(-1.0, 1.0) };
+            let vg = v * g;
+            e_voice += vg * vg;
+            *vo = if vg.is_nan() {
+                0.0
+            } else {
+                vg.clamp(-1.0, 1.0)
+            };
+            e_app += a * a;
+            let s = m * g;
+            *y = if s.is_nan() { 0.0 } else { s.clamp(-1.0, 1.0) };
         }
 
         FrameInfo {
@@ -776,7 +844,12 @@ impl Chain {
             rms_db: 10.0 * (sum_sq / FRAME as f32).max(1e-18).log10(),
             speaking: n_voiced >= FRAME / 2,
             voice_db: self.agc.level_db(),
-            e_stages: [e_pre, e_aec, e_den, energy(out)],
+            e_stages: [e_pre, e_aec, e_den, e_voice],
+            app_db: if e_app > 0.0 {
+                10.0 * (e_app / FRAME as f32).log10()
+            } else {
+                -120.0
+            },
         }
     }
 }
@@ -819,6 +892,92 @@ mod tests {
             .fold(0.0, f32::max);
         let sine_step = 0.3 * 2.0 * std::f32::consts::PI * 1000.0 / SR as f32;
         assert!(max_step <= sine_step * 1.6, "jump {max_step}");
+    }
+
+    /// Runs `frames` of silent mic with an app playing a 0.5 sine through the mix.
+    /// `muted(i)` sets mute per frame. Returns the output.
+    fn run_app(p: &Params, frames: usize, muted: impl Fn(usize) -> bool) -> Vec<f32> {
+        use ringbuf::HeapRb;
+        use ringbuf::traits::{Producer, Split};
+        let (mut prod, cons) = HeapRb::<f32>::new(FRAME * 64).split();
+        let mut chain = Chain::new(EngineSlot::new(Box::new(Off)), p);
+        chain.set_app(Some(crate::appaudio::AppMix::new(cons)));
+        let tone = sine(440.0, 0.5, FRAME * frames);
+        let mut out = Vec::new();
+        for (i, f) in tone.as_chunks::<FRAME>().0.iter().enumerate() {
+            prod.push_slice(f);
+            p.muted.store(muted(i), Relaxed);
+            let mut y = [0.0; FRAME];
+            chain.process(&[0.0; FRAME], p, &mut y);
+            out.extend_from_slice(&y);
+        }
+        out
+    }
+
+    #[test]
+    fn voice_only_output_never_holds_the_app() {
+        use ringbuf::HeapRb;
+        use ringbuf::traits::{Producer, Split};
+        let p = Params::new();
+        p.app.store(true, Relaxed);
+        p.set_app_volume(0.5f32.sqrt());
+        let (mut prod, cons) = HeapRb::<f32>::new(FRAME * 64).split();
+        let mut chain = Chain::new(EngineSlot::new(Box::new(Off)), &p);
+        chain.set_app(Some(crate::appaudio::AppMix::new(cons)));
+        let tone = sine(440.0, 0.5, FRAME * 30);
+        let (mut out, mut voice) = (Vec::new(), Vec::new());
+        for f in tone.as_chunks::<FRAME>().0 {
+            prod.push_slice(f);
+            let mut y = [0.0; FRAME];
+            chain.process(&[0.0; FRAME], &p, &mut y);
+            out.extend_from_slice(&y);
+            voice.extend_from_slice(chain.voice());
+        }
+        // The output carries the app; the voice-only copy is silent.
+        assert!(rms(&out[20 * FRAME..]) > 0.1);
+        assert!(voice.iter().all(|&s| s == 0.0));
+    }
+
+    #[test]
+    fn app_is_mixed_at_its_volume_past_the_closed_gate() {
+        let p = Params::new();
+        p.app.store(true, Relaxed);
+        p.set_app_volume(0.5f32.sqrt());
+        // Silent mic: the gate is closed, yet the app comes through at 0.5 × 0.5.
+        let out = run_app(&p, 40, |_| false);
+        let got = rms(&out[20 * FRAME..]);
+        let want = 0.25 / 2f32.sqrt();
+        assert!((got - want).abs() < 0.01, "{got} vs {want}");
+        // Off: faded out.
+        p.app.store(false, Relaxed);
+        let out = run_app(&p, 20, |_| false);
+        assert!(rms(&out[10 * FRAME..]) < 1e-6);
+    }
+
+    #[test]
+    fn mute_silences_the_app_unless_mute_keeps_it() {
+        let p = Params::new();
+        p.app.store(true, Relaxed);
+        p.set_app_volume(0.5f32.sqrt());
+        let out = run_app(&p, 40, |i| i >= 20);
+        assert!(rms(&out[10 * FRAME..20 * FRAME]) > 0.1);
+        assert!(out[22 * FRAME..].iter().all(|s| *s == 0.0));
+        p.app_mute_keep.store(true, Relaxed);
+        let out = run_app(&p, 40, |i| i >= 20);
+        assert!(
+            rms(&out[22 * FRAME..]) > 0.1,
+            "app kept playing while muted"
+        );
+    }
+
+    #[test]
+    fn loud_app_is_held_under_the_limiter_ceiling() {
+        let p = Params::new();
+        p.app.store(true, Relaxed);
+        p.set_app_volume(1.0);
+        let out = run_app(&p, 40, |_| false);
+        let peak = out[10 * FRAME..].iter().fold(0.0f32, |m, s| m.max(s.abs()));
+        assert!(peak <= db_to_lin(-1.0) + 1e-3, "peak {peak}");
     }
 
     #[test]

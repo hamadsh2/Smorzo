@@ -19,6 +19,7 @@ use cpal::{DeviceId, Host};
 use ringbuf::traits::{Consumer, Observer, Split};
 use ringbuf::{HeapCons, HeapRb};
 
+use crate::appaudio;
 use crate::denoise::{Denoiser, Off, Rnnoise};
 use crate::devices::{self, Dir};
 use crate::dfn;
@@ -118,6 +119,25 @@ pub struct Controller {
     echo_error: Option<String>,
     /// Last attempt to start echo removal (retried every few seconds while wanted).
     echo_tried: Option<Instant>,
+    /// "App through mic": the picked app's exe name (`None` until the user picks one).
+    app_exe: Option<String>,
+    /// The running read-only capture of that app.
+    app_cap: Option<appaudio::AppCapture>,
+    /// Why the app isn't being mixed in (shown once in notes, and by `app_state`).
+    app_error: Option<String>,
+    /// Last attempt to start the capture (retried every few seconds while wanted).
+    app_tried: Option<Instant>,
+}
+
+/// Where "App through mic" stands.
+#[derive(Clone, Debug, PartialEq)]
+pub enum AppState {
+    /// Turned off, or no app picked.
+    Off,
+    /// Wanted, but not running; the reason.
+    Waiting(String),
+    /// Mixing this app in (its exe name).
+    On(String),
 }
 
 /// Where echo removal stands.
@@ -208,6 +228,10 @@ impl Controller {
             echo: None,
             echo_error: None,
             echo_tried: None,
+            app_exe: None,
+            app_cap: None,
+            app_error: None,
+            app_tried: None,
         })
     }
 
@@ -238,6 +262,50 @@ impl Controller {
             (None, Some(why)) if self.echo_wanted() => EchoState::Waiting(why.clone()),
             _ => EchoState::Off,
         }
+    }
+
+    /// The app picked for "App through mic" (exe name).
+    pub fn app(&self) -> Option<&str> {
+        self.app_exe.as_deref()
+    }
+
+    /// Apps playing sound (or that have), minus the ones that can't be picked. Only
+    /// lists audio sessions — opens nothing.
+    pub fn app_choices(&self) -> Result<Vec<appaudio::AudioApp>, String> {
+        appaudio::allowed(appaudio::list_apps()?)
+    }
+
+    /// Pick the app for "App through mic" by its exe name (`None` = no app). The
+    /// capture (re)starts on the next tick if the setting is on.
+    pub fn pick_app(&mut self, exe: Option<&str>) -> Result<(), String> {
+        if let Some(why) = exe.and_then(appaudio::blocked_reason) {
+            return Err(format!("{why}."));
+        }
+        self.stop_app();
+        self.app_exe = exe.map(str::to_string);
+        self.app_error = None;
+        self.app_tried = None;
+        Ok(())
+    }
+
+    pub fn app_state(&self) -> AppState {
+        match (&self.app_cap, &self.app_error, &self.app_exe) {
+            (Some(_), _, Some(exe)) => AppState::On(exe.clone()),
+            (None, Some(why), _) if self.app_wanted() => AppState::Waiting(why.clone()),
+            _ => AppState::Off,
+        }
+    }
+
+    fn app_wanted(&self) -> bool {
+        self.params.app.load(Relaxed) && self.app_exe.is_some()
+    }
+
+    /// Take the app out of the mix and stop its capture.
+    fn stop_app(&mut self) {
+        if let Some(w) = self.worker.as_ref() {
+            let _ = w.set_app(None);
+        }
+        self.app_cap = None; // stops and joins the capture thread
     }
 
     fn echo_wanted(&self) -> bool {
@@ -382,6 +450,7 @@ impl Controller {
         };
         if self.stats.worker_failed.load(Relaxed) {
             self.echo = None; // the headphones loopback stops with the voice streams
+            self.app_cap = None; // and so does the app capture
             self.streams = None;
             return Err("the denoise engine stopped unexpectedly".into());
         }
@@ -479,7 +548,80 @@ impl Controller {
             }
         }
         self.tick_echo();
+        self.tick_app();
         Ok(())
+    }
+
+    /// "App through mic" follows the setting and the streams, like echo removal: it
+    /// runs only while the voice streams do, the setting is on and an app is picked.
+    /// If the app closes it pauses and looks for it again every few seconds — only
+    /// ever that app (by exe name), never another.
+    fn tick_app(&mut self) {
+        if let Some(w) = self.worker.as_ref() {
+            while let Ok(old) = w.retired_app.try_recv() {
+                drop(old); // its ring is freed here, not on the audio path
+            }
+        }
+        let want = self.app_wanted() && self.streams.is_some();
+        if self.app_cap.is_some() {
+            if !want {
+                self.stop_app();
+                self.app_error = None;
+            } else if self.stats.app_failed.load(Relaxed) {
+                self.stop_app();
+                let exe = self.app_exe.clone().unwrap_or_default();
+                let why = format!("{exe} closed");
+                self.notes.push(format!("App through mic paused: {why}."));
+                self.app_error = Some(why);
+                self.app_tried = Some(Instant::now());
+            } else if let Some(Err(why)) = self.app_cap.as_ref().map(|c| appaudio::check(&c.app()))
+            {
+                // The app started Discord (or another Sotto) while being captured: its
+                // sound would go out too. Stop now; never switch to another app.
+                self.stop_app();
+                self.notes.push(format!("App through mic stopped: {why}."));
+                self.app_error = Some(why);
+                self.app_tried = Some(Instant::now());
+            }
+            return;
+        }
+        if !want {
+            self.app_error = None;
+            self.app_tried = None;
+            return;
+        }
+        if self.app_tried.is_some_and(|t| t.elapsed() < ECHO_RETRY) {
+            return;
+        }
+        self.app_tried = Some(Instant::now());
+        let (Some(exe), Some(worker)) = (self.app_exe.clone(), self.worker.as_ref()) else {
+            return;
+        };
+        let attempt = appaudio::list_apps().and_then(|apps| {
+            let app = apps
+                .into_iter()
+                .find(|a| a.exe.eq_ignore_ascii_case(&exe))
+                .ok_or_else(|| format!("{exe} isn't open, or hasn't played sound yet"))?;
+            let (cap, mix) = appaudio::start(&app, Arc::clone(&self.stats))?;
+            worker.set_app(Some(mix))?;
+            Ok(cap)
+        });
+        match attempt {
+            Ok(cap) => {
+                self.notes.push(format!(
+                    "App through mic on: mixing {exe} (pid {}, read-only).",
+                    cap.pid
+                ));
+                self.app_cap = Some(cap);
+                self.app_error = None;
+            }
+            Err(e) => {
+                if self.app_error.as_deref() != Some(e.as_str()) {
+                    self.notes.push(format!("App through mic waiting: {e}."));
+                }
+                self.app_error = Some(e);
+            }
+        }
     }
 
     /// Echo removal follows the setting and the streams: it runs only while the voice
@@ -733,6 +875,7 @@ impl Drop for Controller {
         self.player = None;
         self.recording = None;
         self.echo = None;
+        self.app_cap = None;
         self.streams = None;
         if let Some(w) = self.worker.take() {
             w.stop();

@@ -29,6 +29,8 @@ OPTIONS:
   --output NAME     VB-Cable output (default: \"CABLE Input\"). Only VB-Audio devices are allowed.
   --headphones NAME Your headphones, for echo removal (turns it on). Sotto only listens
                     to what plays there (read-only loopback); it never plays to them.
+  --app NAME        Mix this app's sound into your mic, e.g. Spotify.exe (turns it on).
+                    Sotto only copies that app's sound (read-only); it plays nothing.
   --engine NAME     rnnoise (default, \"Light — for gaming\"),
                     dfn (DeepFilterNet, \"High quality — for recording & calls\"),
                     or off (passthrough)
@@ -59,6 +61,11 @@ Commands (type, then Enter):
   play               play that clip once on your Windows playback device
   hide on|off        hide your voice from screen shares (exclusive CABLE Input)
   echo on|off        remove headphone echo (needs --headphones)
+  apps               list apps playing sound (for \"app\")
+  app Spotify.exe    mix this app's sound into your mic (turns it on)
+  app on|off         app through mic on/off
+  app vol 20         its level in the mix, 0-100 like the window's slider (default 20)
+  app mutekeep on|off  mute leaves the app playing (default off: mute silences it too)
   status             show current settings
   stats              show the latest performance line
   report on|off      print that line every second (off = easier typing)
@@ -81,6 +88,10 @@ enum Cmd {
     Play,
     /// "Hide my voice from screen shares": exclusive CABLE Input on/off (reopens streams).
     Hide(bool),
+    /// List apps playing sound.
+    Apps,
+    /// Pick the app for "App through mic" (exe name) and turn it on.
+    PickApp(String),
 }
 
 /// Apply one typed command.
@@ -108,6 +119,17 @@ fn handle_command(line: &str, p: &Params) -> Cmd {
         ["record"] => return Cmd::Record,
         ["play"] => return Cmd::Play,
         ["echo", v] => toggle("echo", &p.echo, v),
+        ["apps"] => return Cmd::Apps,
+        ["app", v @ ("on" | "off")] => toggle("app", &p.app, v),
+        ["app", "mutekeep", v] => toggle("app mutekeep", &p.app_mute_keep, v),
+        ["app", "vol" | "volume", v] => match v.trim_end_matches('%').parse::<f32>() {
+            Ok(pct) => {
+                p.set_app_volume(pct / 100.0);
+                println!("> app volume {:.0}%", p.app_volume() * 100.0);
+            }
+            Err(_) => println!("> use: app vol 0-100"),
+        },
+        ["app", name] => return Cmd::PickApp((*name).to_string()),
         ["hide", "on"] => return Cmd::Hide(true),
         ["hide", "off"] => return Cmd::Hide(false),
         ["hpf", v] => toggle("hpf", &p.hpf, v),
@@ -197,6 +219,7 @@ struct Args {
     input: Option<String>,
     output: Option<String>,
     headphones: Option<String>,
+    app: Option<String>,
     engine: EngineKind,
     seconds: Option<u64>,
     quiet: bool,
@@ -209,6 +232,7 @@ fn parse_args() -> Result<Args, String> {
         input: None,
         output: None,
         headphones: None,
+        app: None,
         engine: EngineKind::Rnnoise,
         seconds: None,
         quiet: false,
@@ -221,6 +245,7 @@ fn parse_args() -> Result<Args, String> {
             "--input" => a.input = Some(value()?),
             "--output" => a.output = Some(value()?),
             "--headphones" => a.headphones = Some(value()?),
+            "--app" => a.app = Some(value()?),
             "--engine" => {
                 let v = value()?;
                 a.engine = EngineKind::parse(&v)
@@ -293,6 +318,14 @@ fn run() -> Result<(), String> {
         ctl.select(devices::Dir::Headphones, &hp.id)?;
         ctl.params.echo.store(true, Relaxed);
         println!("Echo  : {} (listened to only, never played to)", hp.name);
+    }
+    if let Some(exe) = args.app.as_deref() {
+        ctl.pick_app(Some(exe))?;
+        ctl.params.app.store(true, Relaxed);
+        println!(
+            "App   : {exe} at {:.0}% (its sound is copied into your mic, read-only)",
+            ctl.params.app_volume() * 100.0
+        );
     }
     println!("Engine: {} ({})", args.engine.name(), args.engine.label());
 
@@ -388,6 +421,32 @@ fn run() -> Result<(), String> {
                     tuning = Some(tune::Session::start(Arc::clone(&ctl.stats)));
                     suggestion = None;
                     println!("> tune: stay quiet for 5 s (leave your usual sounds on)…");
+                    continue;
+                }
+                Cmd::Apps => {
+                    match ctl.app_choices() {
+                        Ok(apps) if apps.is_empty() => println!("> no app is playing sound"),
+                        Ok(apps) => {
+                            for a in apps {
+                                let state = if a.playing { "playing" } else { "idle" };
+                                println!(">   {:<32} {state}", a.exe);
+                            }
+                        }
+                        Err(e) => println!("> {e}"),
+                    }
+                    continue;
+                }
+                Cmd::PickApp(exe) => {
+                    match ctl.pick_app(Some(&exe)) {
+                        Ok(()) => {
+                            ctl.params.app.store(true, Relaxed);
+                            println!(
+                                "> app {exe} at {:.0}% — starting",
+                                ctl.params.app_volume() * 100.0
+                            );
+                        }
+                        Err(e) => println!("> {e}"),
+                    }
                     continue;
                 }
                 Cmd::Record => {
@@ -564,7 +623,16 @@ fn run() -> Result<(), String> {
                 }
                 None => String::new(),
             };
-            let echo_txt = format!("{echo_txt}{loud_txt}");
+            let app_txt = match ctl.app_state() {
+                sotto::control::AppState::On(exe) => format!(
+                    " | app {exe} {}",
+                    st.take_app_db()
+                        .map_or("silent".into(), |db| format!("peak {db:.1} dBFS"))
+                ),
+                sotto::control::AppState::Waiting(_) => " | app waiting".into(),
+                sotto::control::AppState::Off => String::new(),
+            };
+            let echo_txt = format!("{echo_txt}{app_txt}{loud_txt}");
             last_report = format!(
                 "{:<7} | frames {:>3} | proc p50 {:>5.3} ms  p99 {:>5.3} ms  max {:>6.3} ms | \
                  CPU {:>5.2}% | RAM {:>5.1} MB (private {:>5.1}) | buffer avg {:>4.1} ms | \

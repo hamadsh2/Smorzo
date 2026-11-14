@@ -39,8 +39,8 @@ Repo: github.com/hamadsh2/Sotto (public). License: GPL-3.0-only.
 
 ## Audio isolation rules (STRICT — never violate)
 - The app streams on exactly **two devices**: the selected input mic and the selected
-  output (VB-Cable "CABLE Input"). Nothing else — except the clip-playback and
-  echo-reference exceptions below.
+  output (VB-Cable "CABLE Input"). Nothing else — except the clip-playback,
+  echo-reference and app-audio exceptions below.
 - Never open a *live* stream on the user's headphones, speakers, or DAC. No live
   monitoring / "listen to yourself while talking" of any kind (it doubles your voice in
   screen shares and recordings).
@@ -59,6 +59,16 @@ Repo: github.com/hamadsh2/Sotto (public). License: GPL-3.0-only.
   Off by default (until the user picks a device); never a VB-Audio / Voicemeeter / CABLE
   device or the selected Sotto output; if the device disappears, echo removal stops and
   reports — never falls back to another device.
+- **App-audio exception ("App through mic", user-approved 2026-11-14):** Sotto may open a
+  **read-only process-loopback capture** (Windows `ActivateAudioInterfaceAsync` with
+  `VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK`) of **one** app the user explicitly picked
+  (matched by its executable name), including that app's child processes, to mix that
+  app's own sound into the output after the voice chain. It opens no stream on any audio
+  device, renders nothing anywhere, changes no setting, and never stores, records, or
+  sends the captured audio anywhere but Sotto's output. Off by default (until the user
+  picks an app and turns it on); never Sotto itself or a voice-chat app (Discord); if the
+  app closes, mixing stops and resumes when it's back — never falls back to another app.
+  Enumerating audio sessions (to list apps that are playing) is read-only and allowed.
 - Never change Windows default playback or recording devices; never modify any system
   audio setting (volume, format, enhancements, exclusive-mode flags, etc.).
 - **WASAPI shared mode** for every stream, so other apps can still use the mic — with one
@@ -79,7 +89,8 @@ Repo: github.com/hamadsh2/Sotto (public). License: GPL-3.0-only.
     except to resolve the clip-playback device above (then opened by its exact ID).
     Reading the default device *only to compare* (for the warning above) is allowed.
   - Enumerating devices is fine; opening a stream is not, except on the two chosen ones,
-    the clip-playback exception, and the echo-reference loopback capture.
+    the clip-playback exception, the echo-reference loopback capture, and the
+    app-audio process-loopback capture.
   - If the selected output is missing, stop output and report — never fall back to
     another device.
 
@@ -87,7 +98,8 @@ Repo: github.com/hamadsh2/Sotto (public). License: GPL-3.0-only.
 Only these crates without asking:
 - Audio: `cpal` (WASAPI backend), `ringbuf` (lock-free SPSC between input/output threads),
   `windows` 0.62 (same version cpal uses; only for the exclusive CABLE Input renderer,
-  user-approved 2026-11-14)
+  user-approved 2026-11-14), `windows-core` 0.62 (the core of `windows`, same version, for
+  its `#[implement]` macro in `appaudio.rs`; user-approved 2026-11-14)
 - Echo removal: `sonora` (pure-Rust WebRTC audio processing, BSD-3-Clause; only its AEC3
   echo canceller is enabled; user-approved 2026-11-14)
 - Denoise: `nnnoiseless` (RNNoise port), DeepFilterNet Rust implementation (`deep_filter`
@@ -117,7 +129,7 @@ codegen-units = 1
   Use `Result` everywhere on device paths; no `unwrap()` there.
 
 ## Processing chain (exact order)
-`High-pass (~80 Hz) → Echo removal → Denoise engine → EQ → Noise gate → Auto gain + limiter → output`
+`High-pass (~80 Hz) → Echo removal → Denoise engine → EQ → Noise gate → Auto gain → App audio mix → Limiter → output`
 - Every stage is independently toggleable.
 - Echo removal (user-approved 2026-11-14): WebRTC AEC3 via `sonora`, reference = loopback
   of the user-picked headphones (see the echo-reference exception), resampled to 48 kHz
@@ -126,6 +138,11 @@ codegen-units = 1
   ~350 Hz), presence (peak ~4 kHz); presets Natural (flat, default) / Warm / Clear /
   Broadcast at ±3 dB max, plus Custom (±6 dB per band, user-adjustable). After denoise
   (the model sees the natural mic) and before AGC (which evens out preset loudness).
+- App audio mix (user-approved 2026-11-14): the picked app's sound (see the app-audio
+  exception), 48 kHz mono, added with its own volume after the gate and auto gain (so the
+  denoiser doesn't remove it, the gate doesn't cut it, and auto gain doesn't pump with it)
+  and before the limiter. Mute silences it too, unless the user turns on "Mute keeps the
+  app playing". Off by default.
 - Noise gate has a threshold parameter and always comes after denoise.
 - Limiter is always last.
 - DSP stages (HPF, EQ, gate, AGC, limiter) must cost near-zero CPU (simple biquads /

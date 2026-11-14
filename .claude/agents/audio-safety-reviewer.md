@@ -35,6 +35,16 @@ break their system audio.
   output; off until the user picks a device; device gone → echo removal stops, never a
   fallback to another (e.g. the default) device. Any loopback capture outside this is a
   BLOCKER, as is any *render* stream on that headphones device.
+- Third exception (user-approved 2026-11-14), "App through mic": a read-only
+  **process-loopback capture** (`ActivateAudioInterfaceAsync` with
+  `VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK`, include-process-tree) of **one** app the user
+  explicitly picked, matched by executable name, mixed into the output after auto gain
+  and before the limiter. No stream on any audio device, nothing rendered, no setting
+  changed, never stored/recorded/sent elsewhere; off until the user picks an app and
+  turns it on; never Sotto's own process or Discord; app gone → mixing stops, never a
+  fallback to another app or to a device loopback. Capturing any other process, or
+  excluding-mode / system-wide loopback, is a BLOCKER. Enumerating audio sessions
+  read-only (to list playing apps) is allowed.
 - Never change Windows default playback/recording devices or any system audio setting.
 - WASAPI shared mode only — never exclusive. **Exception (user-approved 2026-11-14):** the
   output to the selected VB-Cable "CABLE Input" may be exclusive (hides the voice from
@@ -89,7 +99,9 @@ Allowed (do not flag): enumerating devices; reading the default playback device
 *only* to compare it with CABLE Input for the warning; opening streams on the two
 explicitly selected devices in shared mode; the exclusive-mode renderer on the selected
 CABLE Input (by its endpoint ID) with fallback to shared; the read-only echo-reference
-loopback capture on the user-picked headphones (by its endpoint ID) as described above.
+loopback capture on the user-picked headphones (by its endpoint ID) as described above;
+the read-only process-loopback capture of the one user-picked app as described above;
+read-only audio-session enumeration.
 
 ## Output format
 Start with a one-line verdict: `PASS`, `PASS WITH NOTES`, or `FAIL`.

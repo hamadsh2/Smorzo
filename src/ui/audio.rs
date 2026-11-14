@@ -26,12 +26,15 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use cpal::DeviceId;
-use sotto::control::{Change, Chosen, Controller, EchoState, EngineKind, Hear};
+use sotto::appaudio;
+use sotto::control::{AppState as AppMix, Change, Chosen, Controller, EchoState, EngineKind, Hear};
 use sotto::devices::{self, Dir};
 use sotto::engine::OutputMode;
 use sotto::params::Params;
 use sotto::settings::SavedDevice;
 use sotto::stats::Stats;
+
+use super::icons;
 
 #[derive(Clone, Default, PartialEq)]
 pub enum State {
@@ -94,6 +97,41 @@ pub struct Status {
     pub headphones: Option<Device>,
     pub headphone_list: Vec<Device>,
     pub echo: Option<EchoState>,
+    /// "App through mic": the picked app (id = its exe name), the apps playing sound
+    /// to pick from, and where it stands.
+    pub app: Option<Device>,
+    pub app_list: Vec<AppEntry>,
+    pub app_state: Option<AppMix>,
+    pub app_error: Option<String>,
+}
+
+/// An app in the "App through mic" picker.
+#[derive(Clone)]
+pub struct AppEntry {
+    /// Its exe name, e.g. "Spotify.exe" (what is picked and saved).
+    pub exe: String,
+    /// The name shown: the exe name without ".exe".
+    pub name: String,
+    /// Playing sound right now.
+    pub playing: bool,
+    /// Its icon, if Windows has one for the exe.
+    pub icon: Option<Arc<gpui::Image>>,
+}
+
+/// Icons already read, by lower-case exe name (read once per app, kept while Sotto runs;
+/// a few KB each).
+type IconCache = std::collections::HashMap<String, Option<Arc<gpui::Image>>>;
+
+/// An app as the window names it: its exe name, without ".exe".
+fn app_device(exe: &str) -> Device {
+    let name = exe
+        .strip_suffix(".exe")
+        .or_else(|| exe.strip_suffix(".EXE"))
+        .unwrap_or(exe);
+    Device {
+        id: exe.to_string(),
+        name: name.to_string(),
+    }
 }
 
 pub enum Command {
@@ -116,6 +154,10 @@ pub enum Command {
     SetHide(bool),
     /// "Remove headphone echo" changed: start or stop it now.
     SetEcho(bool),
+    /// "App through mic": pick this app (exe name) and turn it on.
+    PickApp(String),
+    /// "App through mic" switched on or off.
+    SetApp(bool),
     Quit,
 }
 
@@ -135,6 +177,8 @@ pub struct Choice {
     pub saved_input: Option<SavedDevice>,
     pub saved_output: Option<SavedDevice>,
     pub saved_headphones: Option<SavedDevice>,
+    /// The app picked for "App through mic" last time (exe name).
+    pub saved_app: Option<String>,
     pub engine: EngineKind,
     /// A problem with the settings file, to show once.
     pub note: Option<String>,
@@ -227,6 +271,12 @@ fn initial_devices(ctl: &mut Controller, choice: &Choice) -> Option<String> {
     {
         err = Some(e);
     }
+    // Through `pick_app`, so a saved name is checked like a fresh pick.
+    if let Some(exe) = choice.saved_app.as_deref()
+        && let Err(e) = ctl.pick_app(Some(exe))
+    {
+        err = Some(e);
+    }
     if choice.output.is_none()
         && let Some(d) = &choice.saved_output
     {
@@ -273,6 +323,7 @@ fn control_loop(
     });
 
     let mut waiting_note = String::new();
+    let mut icons = IconCache::new();
     let mut pending: Option<Want> = None;
     let mut next_tick = Instant::now();
     let mut next_list = Instant::now();
@@ -293,7 +344,7 @@ fn control_loop(
         }
         if visible.load(Relaxed) && now >= next_list {
             next_list = now + LIST_EVERY;
-            refresh_lists(&ctl, status);
+            refresh_lists(&ctl, status, &mut icons);
         }
         if let Some(want) = pending {
             pending = change(&mut ctl, want, status);
@@ -321,11 +372,11 @@ fn control_loop(
                 set(status, |s| s.message = r.err());
                 // Show the new choice at once; the streams open on the next tick.
                 next_tick = Instant::now();
-                refresh_lists(&ctl, status);
+                refresh_lists(&ctl, status, &mut icons);
             }
             Ok(Command::Refresh) => {
                 next_list = Instant::now() + LIST_EVERY;
-                refresh_lists(&ctl, status);
+                refresh_lists(&ctl, status, &mut icons);
             }
             Ok(Command::Record) => {
                 let r = ctl.record();
@@ -352,6 +403,19 @@ fn control_loop(
             Ok(Command::SetEcho(on)) => {
                 ctl.params.echo.store(on, Relaxed);
                 next_tick = Instant::now(); // start or stop right away
+            }
+            Ok(Command::PickApp(exe)) => {
+                let r = ctl.pick_app(Some(&exe));
+                // The window already switched it on (so its save sees it); if the pick
+                // was refused, switch it off again rather than leave an older pick on.
+                ctl.params.app.store(r.is_ok(), Relaxed);
+                set(status, |s| s.app_error = r.err());
+                publish(&ctl, status, &mut waiting_note);
+                next_tick = Instant::now(); // start right away
+            }
+            Ok(Command::SetApp(on)) => {
+                ctl.params.app.store(on, Relaxed);
+                next_tick = Instant::now();
             }
             Ok(Command::Quit) | Err(RecvTimeoutError::Disconnected) => break,
             Err(RecvTimeoutError::Timeout) => {}
@@ -434,6 +498,8 @@ fn publish(ctl: &Controller, status: &Mutex<Status>, waiting_note: &mut String) 
         s.output_mode = ctl.output_mode().cloned();
         s.headphones = ctl.headphones().map(Device::from);
         s.echo = Some(ctl.echo_state());
+        s.app = ctl.app().map(app_device);
+        s.app_state = Some(ctl.app_state());
         if s.loading.is_none() {
             s.engine = Some(ctl.engine_kind());
         }
@@ -442,13 +508,50 @@ fn publish(ctl: &Controller, status: &Mutex<Status>, waiting_note: &mut String) 
 
 /// Re-read what can be chosen. Only lists devices and reads the default device's name
 /// to compare; no stream is opened and nothing is changed.
-fn refresh_lists(ctl: &Controller, status: &Mutex<Status>) {
+fn refresh_lists(ctl: &Controller, status: &Mutex<Status>, icons: &mut IconCache) {
     let list = |dir| {
         ctl.choices(dir)
             .map(|v| v.iter().map(Device::from).collect::<Vec<_>>())
     };
     let (inputs, outputs) = (list(Dir::Input), list(Dir::Output));
     let phones = list(Dir::Headphones);
+    // Apps playing sound: only lists audio sessions, opens nothing. Icons are read from
+    // each app's .exe once (outside the status lock).
+    let app_list = ctl.app_choices().ok().map(|apps| {
+        let mut icon = |pid: u32, exe: &str| {
+            icons
+                .entry(exe.to_lowercase())
+                .or_insert_with(|| appaudio::exe_path(pid).and_then(|p| icons::app_icon(&p)))
+                .clone()
+        };
+        // Only apps playing sound right now (plus the picked one, below): apps that
+        // merely played something once would crowd the main page.
+        let picked = ctl.app().map(str::to_lowercase);
+        let mut list: Vec<AppEntry> = apps
+            .iter()
+            .filter(|a| a.playing || picked.as_deref() == Some(a.exe.to_lowercase().as_str()))
+            .map(|a| AppEntry {
+                exe: a.exe.clone(),
+                name: app_device(&a.exe).name,
+                playing: a.playing,
+                icon: icon(a.pid, &a.exe),
+            })
+            .collect();
+        // Keep the picked app listed while it's closed, so it stays selected.
+        if let Some(exe) = ctl.app()
+            && !list.iter().any(|a| a.exe.eq_ignore_ascii_case(exe))
+        {
+            list.push(AppEntry {
+                exe: exe.to_string(),
+                name: app_device(exe).name,
+                playing: false,
+                icon: icons.get(&exe.to_lowercase()).cloned().flatten(),
+            });
+        }
+        // Playing first, then by name.
+        list.sort_by_key(|a| (!a.playing, a.name.to_lowercase()));
+        list
+    });
     let cable_is_default = ctl.cable_is_default();
     set(status, |s| {
         // Keep the old lists if Windows was busy changing them mid-read.
@@ -462,6 +565,10 @@ fn refresh_lists(ctl: &Controller, status: &Mutex<Status>) {
         if let Ok(v) = phones {
             s.headphone_list = v;
         }
+        if let Some(list) = app_list {
+            s.app_list = list;
+        }
+        s.app = ctl.app().map(app_device);
         s.cable_is_default = cable_is_default;
         s.input = ctl.input().map(Device::from);
         s.output = ctl.output().map(Device::from);

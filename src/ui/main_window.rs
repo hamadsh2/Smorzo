@@ -26,14 +26,14 @@ use gpui::prelude::FluentBuilder;
 use gpui::{
     AnyElement, App, AppContext, ClickEvent, Context, Div, Entity, FocusHandle, FontWeight,
     InteractiveElement, IntoElement, KeyDownEvent, ParentElement, Render, SharedString,
-    StatefulInteractiveElement, Styled, Subscription, Task, Window, div, px, relative, svg,
+    StatefulInteractiveElement, Styled, Subscription, Task, Window, div, img, px, relative, svg,
 };
 use gpui_component::input::{Input, InputEvent, InputState, SelectAll};
 use gpui_component::select::{Select, SelectEvent, SelectItem, SelectState};
 use gpui_component::slider::{Slider, SliderEvent, SliderState};
 use gpui_component::switch::Switch;
 use gpui_component::{Disableable, IndexPath, Sizable};
-use sotto::control::{EchoState, EngineKind, Hear};
+use sotto::control::{AppState as AppMix, EchoState, EngineKind, Hear};
 use sotto::devices::{Dir, VB_CABLE_URL};
 use sotto::engine::OutputMode;
 use sotto::params::{
@@ -43,7 +43,7 @@ use sotto::stats;
 use sotto::tune::{self, Failure, Phase, Suggestion};
 
 use super::assets;
-use super::audio::{Command, Device, State, Status};
+use super::audio::{AppEntry, Command, Device, State, Status};
 use super::health::{Health, Hints};
 use super::licenses::{self, License};
 use super::meter::{self, Meter};
@@ -217,6 +217,8 @@ pub struct MainWindow {
     input_select: DeviceSelect,
     output_select: DeviceSelect,
     headphones_select: DeviceSelect,
+    /// "App through mic": the app's level.
+    app_vol: Entity<SliderState>,
     /// What the pickers currently show, to update them only when something changed.
     shown: [(Vec<Device>, Option<String>); 3],
     /// The stage whose fine settings are open (one at a time).
@@ -311,6 +313,8 @@ impl MainWindow {
         subs.push(on_slide(cx, &strength, |p, v| p.set_strength(v / 100.0)));
         subs.push(on_slide(cx, &gate, |p, v| p.set_gate_threshold_db(v)));
         subs.push(on_slide(cx, &agc, |p, v| p.set_agc_max_db(v)));
+        let app_vol = slider(cx, 0.0, 100.0, 1.0, params.app_volume() * 100.0);
+        subs.push(on_slide(cx, &app_vol, |p, v| p.set_app_volume(v / 100.0)));
         for (i, band) in eq.iter().enumerate() {
             let p = Arc::clone(&params);
             subs.push(cx.subscribe(band, move |_, _, ev: &SliderEvent, cx| {
@@ -340,6 +344,7 @@ impl MainWindow {
         let output_select = cx.new(|cx| SelectState::new(Vec::<Device>::new(), None, window, cx));
         let headphones_select =
             cx.new(|cx| SelectState::new(Vec::<Device>::new(), None, window, cx));
+
         for (sel, dir) in [
             (&input_select, Dir::Input),
             (&output_select, Dir::Output),
@@ -432,6 +437,7 @@ impl MainWindow {
             input_select,
             output_select,
             headphones_select,
+            app_vol,
             shown: Default::default(),
             expanded: None,
             tune_open: false,
@@ -750,7 +756,7 @@ impl MainWindow {
                 } else if muted {
                     "Unmute to record.".into()
                 } else {
-                    "Record 5 s of what others hear.".into()
+                    "Record 5 s of your voice as others hear it.".into()
                 },
                 div().flex().when(running && !muted, |d| {
                     d.child(
@@ -1622,6 +1628,151 @@ impl MainWindow {
             .into_any_element()
     }
 
+    /// "App through mic" on the main page: on/off, the apps playing sound as icons to
+    /// pick from (one click picks and turns it on), and the level of the picked one.
+    fn app_card(&self, st: &Status, cx: &mut Context<Self>) -> AnyElement {
+        let on = self.params.app.load(Relaxed);
+        let level = (self.params.app_volume() * 100.0).round();
+        let picked = st.app.as_ref().map(|d| d.id.clone());
+        let (hint, problem): (SharedString, Option<String>) = match (&st.app, on) {
+            (None, _) if st.app_list.is_empty() => (
+                "Play something in an app, and it shows up here.".into(),
+                None,
+            ),
+            (None, _) => ("Pick an app to mix its sound into your mic.".into(), None),
+            (Some(a), false) => (
+                format!("{} is picked. Switch on to mix it in.", a.name).into(),
+                None,
+            ),
+            (Some(a), true) => match &st.app_state {
+                Some(AppMix::On(_)) => (format!("Mixing {} into your mic.", a.name).into(), None),
+                Some(AppMix::Waiting(why)) => (
+                    format!("Waiting for {}.", a.name).into(),
+                    Some(format!("App through mic is waiting: {why}.")),
+                ),
+                _ => ("Starting…".into(), None),
+            },
+        };
+        let chips = st.app_list.iter().enumerate().map(|(i, a)| {
+            let selected = picked
+                .as_deref()
+                .is_some_and(|p| p.eq_ignore_ascii_case(&a.exe));
+            let exe = a.exe.clone();
+            app_chip(a, selected)
+                .id(("app-chip", i))
+                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                    this.params.app.store(true, Relaxed);
+                    send(Command::PickApp(exe.clone()), cx);
+                    save_soon(cx);
+                    cx.notify();
+                }))
+        });
+        div()
+            .flex()
+            .flex_col()
+            .gap(SP_12)
+            .py(SP_12)
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(SP_12)
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .flex()
+                            .flex_col()
+                            .child("App through mic")
+                            .child(caption(hint)),
+                    )
+                    .child(
+                        div().flex_none().cursor_pointer().child(
+                            Switch::new("app-through-mic")
+                                .checked(on)
+                                .on_click(cx.listener(|this, checked: &bool, _, cx| {
+                                    // Set here too, so the save right after sees it.
+                                    this.params.app.store(*checked, Relaxed);
+                                    send(Command::SetApp(*checked), cx);
+                                    save_soon(cx);
+                                    cx.notify();
+                                })),
+                        ),
+                    ),
+            )
+            .when(!st.app_list.is_empty(), |d| {
+                d.child(div().flex().flex_wrap().gap(SP_8).children(chips))
+            })
+            .when(picked.is_some(), |d| {
+                d.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(SP_12)
+                        .child(div().w(px(64.0)).child("Level"))
+                        .child(slider_box(&self.app_vol, true))
+                        .child(
+                            numeric(div().w(px(VALUE_W)).flex().justify_end())
+                                .child(format!("{level:.0}%")),
+                        ),
+                )
+            })
+            .when_some(problem, |d, p| d.child(note(p)))
+            .into_any_element()
+    }
+
+    /// Settings → App through mic: what mute does, and the two things to know (calls
+    /// in the app, whole-screen shares). The app and its level are on the main page.
+    fn app_settings(&self, cx: &mut Context<Self>) -> Vec<AnyElement> {
+        let keep = self.params.app_mute_keep.load(Relaxed);
+        let mute = div()
+            .flex()
+            .items_center()
+            .gap(SP_12)
+            .py(SP_12)
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .flex()
+                    .flex_col()
+                    .child("Mute keeps the app playing")
+                    .child(caption(if keep {
+                        "Mute silences only your voice."
+                    } else {
+                        "Mute silences your voice and the app."
+                    })),
+            )
+            .child(
+                div().flex_none().cursor_pointer().child(
+                    Switch::new("app-mute-keep")
+                        .checked(keep)
+                        .on_click(cx.listener(|this, checked: &bool, _, cx| {
+                            this.params.app_mute_keep.store(*checked, Relaxed);
+                            save_soon(cx);
+                            cx.notify();
+                        })),
+                ),
+            );
+        let tips = div()
+            .flex()
+            .flex_col()
+            .gap(SP_4)
+            .py(SP_12)
+            .child(caption(
+                "The level only changes what your friends hear, not your own volume.",
+            ))
+            .child(caption(
+                "Pick an app that plays music or sounds, not one with your call in it \
+                 (like a browser with Discord open): your friends would hear themselves.",
+            ))
+            .child(caption(
+                "Sharing your whole screen sends the app's sound too, so viewers hear it \
+                 twice. Share a window instead.",
+            ));
+        vec![mute.into_any_element(), tips.into_any_element()]
+    }
+
     /// "Check for updates automatically" (at start and once a day).
     fn auto_update_row(&self, cx: &mut Context<Self>) -> AnyElement {
         let on = cx.global::<AppState>().settings.check_updates;
@@ -2105,6 +2256,63 @@ fn result_line(label: &'static str, now: String, new: String) -> impl IntoElemen
         .child(numeric(div()).font_weight(FontWeight::MEDIUM).child(new))
 }
 
+/// One app to pick for "App through mic": its icon (or its first letter) and name.
+/// The picked one has an `accent` outline.
+fn app_chip(a: &AppEntry, selected: bool) -> Div {
+    let badge = match &a.icon {
+        Some(icon) => img(Arc::clone(icon))
+            .size(px(20.0))
+            .flex_none()
+            .into_any_element(),
+        None => div()
+            .size(px(20.0))
+            .flex_none()
+            .flex()
+            .items_center()
+            .justify_center()
+            .rounded(RADIUS_CONTROL)
+            .bg(c(BORDER))
+            .text_size(px(CAPTION))
+            .font_weight(FontWeight::MEDIUM)
+            .text_color(c(TEXT_PRIMARY))
+            .child(
+                a.name
+                    .chars()
+                    .next()
+                    .map_or(String::new(), |ch| ch.to_uppercase().collect()),
+            )
+            .into_any_element(),
+    };
+    div()
+        .flex()
+        .items_center()
+        .gap(SP_8)
+        .px(SP_8)
+        .py(SP_4)
+        .max_w(px(160.0))
+        .rounded(RADIUS_CONTROL)
+        .border_1()
+        .border_color(c(if selected { ACCENT } else { BORDER }))
+        .when(selected, |d| d.bg(c(ELEVATED)))
+        .cursor_pointer()
+        .hover(|d| d.bg(c(ELEVATED)))
+        .child(badge)
+        .child(
+            div()
+                .min_w_0()
+                .overflow_hidden()
+                .text_ellipsis()
+                .whitespace_nowrap()
+                .text_size(px(LABEL))
+                .text_color(c(if selected {
+                    TEXT_PRIMARY
+                } else {
+                    TEXT_SECONDARY
+                }))
+                .child(a.name.clone()),
+        )
+}
+
 /// A one-line advisory: caption text with a 2px `warning` rule.
 fn note(text: impl Into<SharedString>) -> impl IntoElement {
     div()
@@ -2344,7 +2552,11 @@ impl Render for MainWindow {
                         .child(level_meter("Output", self.meter_out, running, None, false))
                         .child(self.hear_row(&st, cx)),
                 )
-                .child(list_card(vec![self.echo_row(&st, cx), self.mute_row(cx)]))
+                .child(list_card(vec![
+                    self.echo_row(&st, cx),
+                    self.app_card(&st, cx),
+                    self.mute_row(cx),
+                ]))
                 .child(
                     div()
                         .flex()
@@ -2458,6 +2670,7 @@ impl MainWindow {
             )
             .child(section("Devices", devices))
             .child(section("Voice", voice))
+            .child(section("App through mic", self.app_settings(cx)))
             .child(section("Shortcut", vec![self.shortcut_row(cx)]))
             .child(section(
                 "App",

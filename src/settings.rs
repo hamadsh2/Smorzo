@@ -42,6 +42,14 @@ pub struct Settings {
     pub headphones: Option<SavedDevice>,
     /// "Remove headphone echo". Off by default.
     pub echo: bool,
+    /// "App through mic": the picked app's executable name, e.g. "Spotify.exe".
+    pub app: Option<String>,
+    /// Mixing that app in (off by default).
+    pub app_on: bool,
+    /// Its level in the mix, 0..=1.
+    pub app_volume: f32,
+    /// Mute leaves the app playing.
+    pub app_mute_keep: bool,
     /// "rnnoise", "deepfilternet" or "off".
     pub engine: String,
     /// 0..=1.
@@ -75,6 +83,10 @@ impl Default for Settings {
             output: None,
             headphones: None,
             echo: false,
+            app: None,
+            app_on: false,
+            app_volume: crate::params::APP_VOLUME_DEFAULT,
+            app_mute_keep: false,
             engine: EngineKind::Rnnoise.name().into(),
             strength: 0.0,
             hpf: false,
@@ -130,6 +142,9 @@ impl Settings {
         self.dfn_postfilter = p.dfn_postfilter.load(Relaxed);
         self.hide_from_share = p.hide_from_share.load(Relaxed);
         self.echo = p.echo.load(Relaxed);
+        self.app_on = p.app.load(Relaxed);
+        self.app_volume = p.app_volume();
+        self.app_mute_keep = p.app_mute_keep.load(Relaxed);
     }
 
     /// Put the saved values into `p`, through the clamping setters.
@@ -149,6 +164,9 @@ impl Settings {
         p.dfn_postfilter.store(self.dfn_postfilter, Relaxed);
         p.hide_from_share.store(self.hide_from_share, Relaxed);
         p.echo.store(self.echo, Relaxed);
+        p.app.store(self.app_on, Relaxed);
+        p.set_app_volume(self.app_volume);
+        p.app_mute_keep.store(self.app_mute_keep, Relaxed);
     }
 
     /// Parse TOML and clamp every value into its valid range.

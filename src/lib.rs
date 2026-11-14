@@ -2,6 +2,7 @@
 //! Sotto's audio engine as a library, shared by the window app (`src/main.rs`) and the
 //! command-line tool (`src/bin/sotto-cli.rs`).
 
+pub mod appaudio;
 pub mod control;
 pub mod denoise;
 pub mod devices;

@@ -19,6 +19,7 @@ mod assets;
 mod audio;
 mod health;
 mod hotkey;
+mod icons;
 mod licenses;
 mod main_window;
 mod mark;
@@ -155,6 +156,7 @@ pub fn run() {
         saved_input: s.input.clone(),
         saved_output: s.output.clone(),
         saved_headphones: s.headphones.clone(),
+        saved_app: s.app.clone(),
         engine: args.engine.unwrap_or(s.engine()),
         note: loaded.note,
     };
@@ -384,6 +386,9 @@ fn save_now(cx: &mut App) {
         }
         if let Some(d) = &s.headphones {
             st.settings.headphones = Some(saved(d));
+        }
+        if let Some(d) = &s.app {
+            st.settings.app = Some(d.id.clone());
         }
         if let Some(e) = s.engine {
             st.settings.engine = e.name().into();
