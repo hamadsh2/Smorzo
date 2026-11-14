@@ -13,7 +13,7 @@ so Discord, games and calls hear only you. Small, CPU-only, quiet while you play
 
 <br>
 
-<img src="assets/readme/sotto-window.png" width="400" alt="The Sotto window: noise removal set to Light, strength 100%, level meters showing a voice, Hear yourself, headphone echo removal on, mute with its shortcut, and a link to Settings">
+<img src="assets/readme/sotto-window.png" width="400" alt="The Sotto window: noise removal set to Light, strength 100%, level meters showing a voice, Hear yourself, headphone echo removal on, App through mic on and mixing Spotify (picked from app icons) with its level slider, mute with its shortcut, and a link to Settings">
 
 </div>
 
