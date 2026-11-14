@@ -4,6 +4,8 @@ All notable changes to Sotto. Versions follow [Semantic Versioning](https://semv
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-15
+
 ### Added
 - **App through mic** (off by default): mix one app's sound (music, a soundboard, a video)
   into your voice, so your friends hear it with you. The apps playing sound show up on the
