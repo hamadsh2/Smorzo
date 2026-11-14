@@ -34,6 +34,51 @@ sonora = "0.3.0"
 # version and features cpal 0.18.2 already builds, so it adds no new code to compile.
 windows = { version = "0.62", features = ["Win32_Media_Audio", "Win32_Foundation", "Win32_Media_KernelStreaming", "Win32_Media_Multimedia", "Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_System_Threading"] }
 
+# Debug builds (plain `cargo build` / `cargo test`): tract's debug-only graph check
+# rejects the DeepFilterNet3 model ("duplicate name /convt3/Conv.bias" after codegen;
+# release builds skip it and run the model fine), and unoptimized inference is too slow
+# to keep up in real time. So DeepFilterNet's inference stack is built optimized and
+# without debug assertions even in debug builds. Release builds are unaffected.
+[profile.dev.package.deep_filter]
+opt-level = 3
+debug-assertions = false
+
+[profile.dev.package.tract-core]
+opt-level = 3
+debug-assertions = false
+
+[profile.dev.package.tract-data]
+opt-level = 3
+debug-assertions = false
+
+[profile.dev.package.tract-hir]
+opt-level = 3
+debug-assertions = false
+
+[profile.dev.package.tract-linalg]
+opt-level = 3
+debug-assertions = false
+
+[profile.dev.package.tract-nnef]
+opt-level = 3
+debug-assertions = false
+
+[profile.dev.package.tract-onnx]
+opt-level = 3
+debug-assertions = false
+
+[profile.dev.package.tract-onnx-opl]
+opt-level = 3
+debug-assertions = false
+
+[profile.dev.package.tract-pulse]
+opt-level = 3
+debug-assertions = false
+
+[profile.dev.package.tract-pulse-opl]
+opt-level = 3
+debug-assertions = false
+
 # Keep the default panic = "unwind": devices::no_panic relies on it to survive
 # cpal panicking when a device is unplugged mid-call. Do not set panic = "abort".
 [profile.release]
