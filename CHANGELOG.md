@@ -4,6 +4,8 @@ All notable changes to Sotto. Versions follow [Semantic Versioning](https://semv
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-14
+
 ### Added
 - **Remove headphone echo** (off by default): for open-back headphones, which leak what you
   hear (game, friends, music) into your mic. Pick your headphones and Sotto subtracts that
