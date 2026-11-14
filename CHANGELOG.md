@@ -20,6 +20,7 @@ All notable changes to Sotto. Versions follow [Semantic Versioning](https://semv
 - **Simpler window.** The main screen now fits without scrolling: noise removal, levels,
   Hear yourself, headphone echo and mute (with its shortcut shown). Devices, the voice
   chain, the mute shortcut and app options moved to a new **Settings** page (bottom right).
+  Until a microphone is chosen, the main screen shows a **Choose** button that opens it.
 
 ## [0.2.0] - 2026-11-14
 

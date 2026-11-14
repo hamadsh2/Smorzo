@@ -13,7 +13,7 @@ so Discord, games and calls hear only you. Small, CPU-only, quiet while you play
 
 <br>
 
-<img src="assets/readme/sotto-window.png" width="400" alt="The Sotto window: noise removal set to Light, strength 100%, level meters showing a voice, the microphone and the VB-Cable output">
+<img src="assets/readme/sotto-window.png" width="400" alt="The Sotto window: noise removal set to Light, strength 100%, level meters showing a voice, Hear yourself, headphone echo removal on, mute with its shortcut, and a link to Settings">
 
 </div>
 
@@ -42,7 +42,7 @@ Windows 10 or 11 (64-bit).
    administrator** → **Install Driver**, then restart Windows.
 2. **Install Sotto** from [Releases](https://github.com/hamadsh2/Sotto/releases/latest):
    run `Sotto-<version>-setup.exe`. No admin rights needed.
-3. **In Sotto,** pick your microphone and **CABLE Input**.
+3. **In Sotto,** open **Settings** and pick your microphone and **CABLE Input**.
 4. **In Discord, your game or call app,** set the microphone to **CABLE Output**.
    Your headphones stay as they are.
 

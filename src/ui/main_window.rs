@@ -2237,6 +2237,36 @@ impl Render for MainWindow {
                 .into_any_element(),
             );
         }
+        if st.state == State::NeedsDevices && !st.cable_missing {
+            // First run: the device pickers live in Settings, so point there.
+            warnings.push(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(SP_12)
+                    .p(SP_16)
+                    .bg(c(SURFACE))
+                    .rounded(RADIUS_PANEL)
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .flex()
+                            .flex_col()
+                            .child("Choose your microphone")
+                            .child(caption("And CABLE Input as the output.")),
+                    )
+                    .child(
+                        button("choose-devices", "Choose", true).on_click(cx.listener(
+                            |this, _: &ClickEvent, _, cx| {
+                                this.page = Page::Settings;
+                                cx.notify();
+                            },
+                        )),
+                    )
+                    .into_any_element(),
+            );
+        }
         if st.cable_is_default {
             warnings.push(
                 warning_card(
