@@ -1,8 +1,24 @@
 # Changelog
 
-All notable changes to Sotto. Versions follow [Semantic Versioning](https://semver.org).
+All notable changes to Smorzo (called Sotto until v0.5.0). Versions follow [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
+
+## [0.5.0] - 2026-11-16
+
+### Changed
+- **Sotto is now Smorzo.** Same app, logo and settings under a new name, and the
+  repository moved to github.com/hamadsh2/Smorzo (old links lead there).
+  - Updating from inside Sotto 0.4.0 installs Smorzo.
+  - Your settings are copied from `%APPDATA%\Sotto` on the first start (the old file
+    stays as a backup), and *Start with Windows* stays on if it was on.
+  - Installing Smorzo over Sotto replaces it (same uninstall entry) and removes the old
+    program file and shortcuts.
+  - An old Sotto and Smorzo never run at the same time.
+
+### Added
+- **Four themes** in *Settings → Appearance*: Warm stone (the default), Midnight, Ink and
+  Paper (light). The window's title bar follows the theme.
 
 ## [0.4.0] - 2026-11-15
 
