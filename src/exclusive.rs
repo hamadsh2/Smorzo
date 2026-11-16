@@ -2,7 +2,7 @@
 //! Exclusive-mode output to VB-Cable's "CABLE Input": "Hide my voice from screen shares".
 //!
 //! Why: Discord's whole-screen share records every app's sound with Windows' *process
-//! loopback* capture. That capture taps the shared-mode audio engine, so Sotto's
+//! loopback* capture. That capture taps the shared-mode audio engine, so Smorzo's
 //! shared-mode output to CABLE Input was recorded too, and viewers heard your voice
 //! twice (once from the mic, once from the share). An **exclusive-mode** stream skips the
 //! audio engine and goes straight to the driver, so loopback can't see it, while the
@@ -200,7 +200,7 @@ pub fn start(
     let stop_flag = Arc::clone(&stop);
     let id = endpoint_id.to_string();
     let spawned = thread::Builder::new()
-        .name("sotto-cable-exclusive".into())
+        .name("smorzo-cable-exclusive".into())
         .spawn(move || run(&id, ring, stats, stop_flag, tx));
     let handle = match spawned {
         Ok(h) => h,
@@ -291,7 +291,7 @@ fn open(endpoint_id: &str) -> Result<Opened, String> {
                     )
                     .is_ok()
             })
-            .ok_or("CABLE Input has no 48 kHz format Sotto can use in exclusive mode")?;
+            .ok_or("CABLE Input has no 48 kHz format Smorzo can use in exclusive mode")?;
         let wave = format.wave();
 
         let mut period = 0i64;

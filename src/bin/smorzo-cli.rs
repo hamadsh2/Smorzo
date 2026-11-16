@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-//! Sotto command-line tool: the same engine as the window app, driven by typed
+//! Smorzo command-line tool: the same engine as the window app, driven by typed
 //! commands. Used for testing and measurements.
 //!
 //! Captures the chosen microphone, removes noise with RNNoise, and writes the result to
@@ -11,26 +11,26 @@ use std::sync::atomic::Ordering::Relaxed;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
-use sotto::control::{Change, Controller, EngineKind, Hear};
-use sotto::params::{EqPreset, Params};
-use sotto::tune::{self, Phase};
-use sotto::{devices, engine, stats};
+use smorzo::control::{Change, Controller, EngineKind, Hear};
+use smorzo::params::{EqPreset, Params};
+use smorzo::tune::{self, Phase};
+use smorzo::{devices, engine, stats};
 
 const USAGE: &str = "\
-Sotto — just your voice.
+Smorzo — just your voice.
 
 USAGE:
-  sotto --list
-  sotto --input \"<mic name>\" [--output \"<VB-Cable name>\"] [--engine rnnoise|dfn|off] [--seconds N] [--quiet]
+  smorzo --list
+  smorzo --input \"<mic name>\" [--output \"<VB-Cable name>\"] [--engine rnnoise|dfn|off] [--seconds N] [--quiet]
 
 OPTIONS:
   --list            Show microphones and VB-Cable outputs, then exit
   --input NAME      Microphone to clean (full name or a unique part of it)
   --output NAME     VB-Cable output (default: \"CABLE Input\"). Only VB-Audio devices are allowed.
-  --headphones NAME Your headphones, for echo removal (turns it on). Sotto only listens
+  --headphones NAME Your headphones, for echo removal (turns it on). Smorzo only listens
                     to what plays there (read-only loopback); it never plays to them.
   --app NAME        Mix this app's sound into your mic, e.g. Spotify.exe (turns it on).
-                    Sotto only copies that app's sound (read-only); it plays nothing.
+                    Smorzo only copies that app's sound (read-only); it plays nothing.
   --engine NAME     rnnoise (default, \"Light — for gaming\"),
                     dfn (DeepFilterNet, \"High quality — for recording & calls\"),
                     or off (passthrough)
@@ -280,18 +280,18 @@ fn run() -> Result<(), String> {
     if args.list {
         return devices::print_list(&cpal::default_host());
     }
-    // Only one Sotto may write to CABLE Input. `_claim` holds the shared lock until
+    // Only one Smorzo may write to CABLE Input. `_claim` holds the shared lock until
     // `run` returns.
-    let _claim = match sotto::instance::claim() {
-        sotto::instance::Outcome::Taken => {
+    let _claim = match smorzo::instance::claim() {
+        smorzo::instance::Outcome::Taken => {
             return Err(
-                "Sotto is already running (the window app or another sotto-cli). \
+                "Smorzo is already running (the window app or another smorzo-cli). \
                         Quit it from its tray icon first."
                     .into(),
             );
         }
-        sotto::instance::Outcome::Alone(c) => Some(c),
-        sotto::instance::Outcome::Unknown => None,
+        smorzo::instance::Outcome::Alone(c) => Some(c),
+        smorzo::instance::Outcome::Unknown => None,
     };
     let Some(input_query) = args.input.as_deref() else {
         devices::print_list(&cpal::default_host())?;
@@ -308,7 +308,7 @@ fn run() -> Result<(), String> {
             "Heads up: \"CABLE Input\" is set as your Windows default playback device, so \
              your games and music are going into the cable instead of your headphones.\n\
              To fix it: Settings → System → Sound → Output → pick your headphones or speakers.\n\
-             Sotto will not change this for you.\n"
+             Smorzo will not change this for you.\n"
         );
     }
     println!("Input : {}", ctl.input_name());
@@ -600,18 +600,18 @@ fn run() -> Result<(), String> {
                 _ => "  (measuring)".into(),
             };
             let echo_txt = match (ctl.echo_state(), st.echo_readings()) {
-                (sotto::control::EchoState::On(_), (erle, delay)) => format!(
+                (smorzo::control::EchoState::On(_), (erle, delay)) => format!(
                     " | echo removed {} delay {}",
                     erle.map_or("—".into(), |e| format!("{e:.1} dB")),
                     delay.map_or("—".into(), |d| format!("{d} ms"))
                 ),
-                (sotto::control::EchoState::Waiting(_), _) => " | echo waiting".into(),
+                (smorzo::control::EchoState::Waiting(_), _) => " | echo waiting".into(),
                 _ => String::new(),
             };
             let loud_txt = match st.take_loud() {
                 Some((n, [aec, den, rest])) => {
                     // Only while echo removal runs (otherwise that stage is a no-op).
-                    let aec = if matches!(ctl.echo_state(), sotto::control::EchoState::On(_)) {
+                    let aec = if matches!(ctl.echo_state(), smorzo::control::EchoState::On(_)) {
                         format!("echo {aec:+5.1} dB, ")
                     } else {
                         String::new()
@@ -624,13 +624,13 @@ fn run() -> Result<(), String> {
                 None => String::new(),
             };
             let app_txt = match ctl.app_state() {
-                sotto::control::AppState::On(exe) => format!(
+                smorzo::control::AppState::On(exe) => format!(
                     " | app {exe} {}",
                     st.take_app_db()
                         .map_or("silent".into(), |db| format!("peak {db:.1} dBFS"))
                 ),
-                sotto::control::AppState::Waiting(_) => " | app waiting".into(),
-                sotto::control::AppState::Off => String::new(),
+                smorzo::control::AppState::Waiting(_) => " | app waiting".into(),
+                smorzo::control::AppState::Off => String::new(),
             };
             let echo_txt = format!("{echo_txt}{app_txt}{loud_txt}");
             last_report = format!(

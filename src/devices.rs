@@ -21,7 +21,7 @@ use cpal::traits::{DeviceTrait, HostTrait};
 use cpal::{Device, DeviceId, Host};
 
 pub const VB_CABLE_URL: &str = "https://vb-audio.com/Cable/";
-/// The render endpoint VB-Cable creates; this is where Sotto writes clean audio.
+/// The render endpoint VB-Cable creates; this is where Smorzo writes clean audio.
 const CABLE_INPUT: &str = "CABLE Input";
 
 /// A device together with the name and ID we read from it once.
@@ -35,7 +35,7 @@ pub struct Named {
 pub enum Dir {
     Input,
     Output,
-    /// The user's headphones, picked for echo removal: Sotto only ever opens a
+    /// The user's headphones, picked for echo removal: Smorzo only ever opens a
     /// read-only loopback capture on it (see `echo.rs`), never plays anything there.
     Headphones,
 }
@@ -106,7 +106,7 @@ fn pick(mut devices: Vec<Named>, query: &str, kind: &str) -> Result<Named, Strin
     match candidates.as_slice() {
         &[i] => Ok(devices.swap_remove(i)),
         [] => Err(format!(
-            "no {kind} device matches \"{query}\". Run `sotto --list` to see device names."
+            "no {kind} device matches \"{query}\". Run `smorzo --list` to see device names."
         )),
         many => Err(format!(
             "\"{query}\" matches {} {kind} devices: {}. Use the full name.",
@@ -154,11 +154,11 @@ pub fn find_output(host: &Host, query: Option<&str>) -> Result<Named, String> {
              (VBCABLE_Driver_Pack46 or newer), not the old one.\n\
              2. Extract all the files.\n\
              3. Right-click VBCABLE_Setup_x64.exe, Run as administrator, Install Driver.\n\
-             4. Restart Windows and run Sotto again."
+             4. Restart Windows and run Smorzo again."
         ));
     }
     pick(cables, query.unwrap_or(CABLE_INPUT), "VB-Cable output").map_err(|e| {
-        format!("{e}\n(Sotto only outputs to VB-Cable — never to speakers or headphones.)")
+        format!("{e}\n(Smorzo only outputs to VB-Cable — never to speakers or headphones.)")
     })
 }
 
@@ -216,7 +216,7 @@ pub fn print_list(host: &Host) -> Result<(), String> {
             println!("  {}", d.name);
         }
     }
-    println!("\nVB-Cable outputs (where Sotto can send clean audio):");
+    println!("\nVB-Cable outputs (where Smorzo can send clean audio):");
     let cables: Vec<Named> = list(host, Dir::Output)?
         .into_iter()
         .filter(|d| is_vb_cable(&d.name))

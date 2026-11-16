@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! The main window: engine selector, strength, level meters, device pickers, the
 //! voice-chain switches (with fine settings that open under their row), warnings, and
-//! a CPU · latency readout. "About Sotto" near the bottom swaps in the About page (version,
+//! a CPU · latency readout. "About Smorzo" near the bottom swaps in the About page (version,
 //! license, third-party licenses) in the same window.
 //!
 //! How the controls reach the audio (see `audio.rs`):
@@ -33,14 +33,14 @@ use gpui_component::select::{Select, SelectEvent, SelectItem, SelectState};
 use gpui_component::slider::{Slider, SliderEvent, SliderState};
 use gpui_component::switch::Switch;
 use gpui_component::{Disableable, IndexPath, Sizable};
-use sotto::control::{AppState as AppMix, EchoState, EngineKind, Hear};
-use sotto::devices::{Dir, VB_CABLE_URL};
-use sotto::engine::OutputMode;
-use sotto::params::{
+use smorzo::control::{AppState as AppMix, EchoState, EngineKind, Hear};
+use smorzo::devices::{Dir, VB_CABLE_URL};
+use smorzo::engine::OutputMode;
+use smorzo::params::{
     AGC_MAX_DB_MAX, AGC_MAX_DB_MIN, EQ_DB_LIMIT, EqPreset, GATE_DB_MAX, GATE_DB_MIN, Params,
 };
-use sotto::stats;
-use sotto::tune::{self, Failure, Phase, Suggestion};
+use smorzo::stats;
+use smorzo::tune::{self, Failure, Phase, Suggestion};
 
 use super::assets;
 use super::audio::{AppEntry, Command, Device, State, Status};
@@ -250,7 +250,7 @@ pub struct MainWindow {
     rec_error: Option<String>,
     /// Which page is shown: the main controls, Settings, or About.
     page: Page,
-    /// The license opened on the About page (0 = Sotto's own, n = third-party n-1) and
+    /// The license opened on the About page (0 = Smorzo's own, n = third-party n-1) and
     /// its text reflowed for the window's width.
     open_license: Option<(usize, SharedString)>,
     meter_in: Meter,
@@ -705,7 +705,7 @@ impl MainWindow {
                     "Takes 10 seconds: 5 quiet, then 5 talking. Nothing changes until you \
                      apply it."
                 } else {
-                    "Start Sotto with your microphone first."
+                    "Start Smorzo with your microphone first."
                 }))
                 .when(running, |d| d.child(div().flex().child(start)))
                 .into_any_element(),
@@ -1302,13 +1302,13 @@ impl MainWindow {
         }
     }
 
-    /// The About page: what Sotto is, its version and license, and every third-party
+    /// The About page: what Smorzo is, its version and license, and every third-party
     /// license. Licenses open one at a time under their row.
     fn about_page(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let open = self.open_license.as_ref().map(|(i, _)| *i);
         let gpl = License {
             name: "GNU General Public License v3.0 only",
-            used_by: "Sotto",
+            used_by: "Smorzo",
             text: licenses::GPL,
         };
         let mut own: Vec<AnyElement> = std::iter::once(&gpl)
@@ -1360,7 +1360,7 @@ impl MainWindow {
                                 div()
                                     .text_size(px(HEADING))
                                     .font_weight(FontWeight::SEMIBOLD)
-                                    .child("Sotto"),
+                                    .child("Smorzo"),
                             )
                             .child(caption(concat!("Version ", env!("CARGO_PKG_VERSION")))),
                     ),
@@ -1368,7 +1368,7 @@ impl MainWindow {
             .child(
                 card("About")
                     .child(
-                        "Sotto cleans your microphone in real time and sends it to VB-Cable. \
+                        "Smorzo cleans your microphone in real time and sends it to VB-Cable. \
                          It never touches your headphones, speakers or Windows sound settings.",
                     )
                     .child(caption(
@@ -1382,7 +1382,7 @@ impl MainWindow {
                             .text_color(c(ACCENT))
                             .cursor_pointer()
                             .hover(|d| d.text_color(c(ACCENT_HOVER)))
-                            .child("github.com/hamadsh2/Sotto")
+                            .child("github.com/hamadsh2/Smorzo")
                             .on_click(|_: &ClickEvent, _, cx| cx.open_url(REPO_URL)),
                     ),
             )
@@ -1400,7 +1400,7 @@ impl MainWindow {
                             .child("Third-party licenses"),
                     )
                     .child(caption(
-                        "Sotto is built with these open-source projects. Thank you.",
+                        "Smorzo is built with these open-source projects. Thank you.",
                     )),
             )
             .child(list_card(third))
@@ -1810,37 +1810,37 @@ impl MainWindow {
         let current = super::update::current_version();
         let (title, hint, button): (SharedString, SharedString, UpdateButton) = match &state {
             UpdateState::Idle => (
-                format!("Sotto {current}").into(),
+                format!("Smorzo {current}").into(),
                 "Not checked yet".into(),
                 Some(("Check now", check_updates)),
             ),
             UpdateState::Checking => (
-                format!("Sotto {current}").into(),
+                format!("Smorzo {current}").into(),
                 "Checking for updates…".into(),
                 None,
             ),
             UpdateState::UpToDate => (
-                format!("Sotto {current}").into(),
+                format!("Smorzo {current}").into(),
                 "You have the latest version".into(),
                 Some(("Check now", check_updates)),
             ),
             UpdateState::Available(v) => (
-                format!("Sotto {v} is available").into(),
+                format!("Smorzo {v} is available").into(),
                 format!("You have {current} · signature checked first").into(),
                 Some(("Install", install_update)),
             ),
             UpdateState::Installing(v) => (
-                format!("Installing Sotto {v}…").into(),
+                format!("Installing Smorzo {v}…").into(),
                 "Downloading and checking the signature".into(),
                 None,
             ),
             UpdateState::Ready(v) => (
-                format!("Sotto {v} is installed").into(),
-                "Restart Sotto to start using it".into(),
+                format!("Smorzo {v} is installed").into(),
+                "Restart Smorzo to start using it".into(),
                 Some(("Restart", restart)),
             ),
             UpdateState::Failed(why) => (
-                format!("Sotto {current}").into(),
+                format!("Smorzo {current}").into(),
                 why.clone().into(),
                 Some(("Try again", check_updates)),
             ),
@@ -1879,7 +1879,7 @@ impl MainWindow {
             .into_any_element()
     }
 
-    /// "About Sotto": opens the About page.
+    /// "About Smorzo": opens the About page.
     fn about_row(&self, cx: &mut Context<Self>) -> AnyElement {
         div()
             .id("open-about")
@@ -1894,7 +1894,7 @@ impl MainWindow {
                     .min_w_0()
                     .flex()
                     .flex_col()
-                    .child("About Sotto")
+                    .child("About Smorzo")
                     .child(caption(concat!(
                         "Version ",
                         env!("CARGO_PKG_VERSION"),
@@ -2050,7 +2050,7 @@ fn segmented(
 /// The update row's button: its label and what it does.
 type UpdateButton = Option<(&'static str, fn(&mut App))>;
 
-const REPO_URL: &str = "https://github.com/hamadsh2/Sotto";
+const REPO_URL: &str = "https://github.com/hamadsh2/Smorzo";
 
 /// The scrolling window background with the app font and text defaults. Each page has
 /// its own `id`, so each keeps its own scroll position.
@@ -2359,7 +2359,7 @@ fn step(n: u8, text: &'static str) -> impl IntoElement {
         .child(div().flex_1().min_w_0().child(text))
 }
 
-/// Header: the Sotto mark, wordmark and tagline, and a small status pill.
+/// Header: the Smorzo mark, wordmark and tagline, and a small status pill.
 fn header(state: &State, muted: bool) -> impl IntoElement {
     let (dot, text) = match state {
         State::Running if muted => (TEXT_SECONDARY, "Muted"),
@@ -2389,7 +2389,7 @@ fn header(state: &State, muted: bool) -> impl IntoElement {
                     div()
                         .text_size(px(HEADING))
                         .font_weight(FontWeight::SEMIBOLD)
-                        .child("Sotto"),
+                        .child("Smorzo"),
                 )
                 .child(caption("Just your voice.")),
         )
@@ -2426,13 +2426,13 @@ impl Render for MainWindow {
         if st.cable_missing {
             warnings.push(
                 warning_card(
-                    "VB-Cable isn't installed, so Sotto has nowhere to send your voice.",
+                    "VB-Cable isn't installed, so Smorzo has nowhere to send your voice.",
                     "It's free and takes a minute:",
                 )
                 .child(step(1, "On VB-Audio's page, download the \"New Package\" zip (VBCABLE_Driver_Pack46 or newer), not the old one."))
                 .child(step(2, "Extract all the files from the zip."))
                 .child(step(3, "Right-click VBCABLE_Setup_x64.exe, choose \"Run as administrator\", then click Install Driver."))
-                .child(step(4, "Restart Windows, then open Sotto."))
+                .child(step(4, "Restart Windows, then open Smorzo."))
                 .child(
                     div()
                         .id("get-vb-cable")
@@ -2479,7 +2479,7 @@ impl Render for MainWindow {
             warnings.push(
                 warning_card(
                     "CABLE Input is your Windows default playback device, so games and music go into the cable.",
-                    "Fix it in Settings → System → Sound → Output: pick your headphones or speakers. Sotto won't change it for you. (While \"Hide my voice from screen shares\" is on, their sound is cut off instead.)",
+                    "Fix it in Settings → System → Sound → Output: pick your headphones or speakers. Smorzo won't change it for you. (While \"Hide my voice from screen shares\" is on, their sound is cut off instead.)",
                 )
                 .into_any_element(),
             );
@@ -2492,12 +2492,12 @@ impl Render for MainWindow {
                     } else {
                         why.clone()
                     },
-                    "Sotto resumes on its own when it's back. It never switches to another device.",
+                    "Smorzo resumes on its own when it's back. It never switches to another device.",
                 )
                 .into_any_element(),
             ),
             State::Stopped(why) => {
-                warnings.push(warning_card("Sotto stopped.", why.clone()).into_any_element())
+                warnings.push(warning_card("Smorzo stopped.", why.clone()).into_any_element())
             }
             _ => {}
         }

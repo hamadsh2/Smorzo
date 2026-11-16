@@ -1,11 +1,11 @@
 ---
-name: sotto-release
-description: Sotto release checklist — version bump, changelog, git tag, GitHub Actions Windows build, release publication, SHA-256 hashes, signature verification for self_update, cargo-about third-party licenses, and README checks. Load whenever preparing, tagging, or verifying a release, or editing the release workflow.
+name: smorzo-release
+description: Smorzo release checklist — version bump, changelog, git tag, GitHub Actions Windows build, release publication, SHA-256 hashes, signature verification for self_update, cargo-about third-party licenses, and README checks. Load whenever preparing, tagging, or verifying a release, or editing the release workflow.
 ---
 
-# Sotto release checklist
+# Smorzo release checklist
 
-Releases are published only from github.com/hamadsh2/Sotto via GitHub Actions on a
+Releases are published only from github.com/hamadsh2/Smorzo via GitHub Actions on a
 version tag. Never build a release locally and upload it by hand. Never push a tag or
 publish without the user's explicit go-ahead.
 
@@ -49,7 +49,7 @@ codegen-units = 1
 
 ## 4. Tag & CI build
 - [ ] User approved tagging.
-- [ ] `git tag -a vX.Y.Z -m "Sotto vX.Y.Z"` then `git push origin main vX.Y.Z`.
+- [ ] `git tag -a vX.Y.Z -m "Smorzo vX.Y.Z"` then `git push origin main vX.Y.Z`.
 - [ ] GitHub Actions workflow (triggered on `v*` tags, `windows-latest`):
   - builds `--release` for `x86_64-pc-windows-msvc`,
   - builds the installer,
@@ -74,12 +74,12 @@ codegen-units = 1
 - [ ] Summary of changes from `CHANGELOG.md`.
 - [ ] SHA-256 for each asset.
 - [ ] Line: "Official builds are published only on this repository's Releases page."
-- [ ] Line: "Sotto never streams live to your headphones or speakers (Hear yourself plays a short clip once, only when you click Play), and never changes Windows audio settings."
+- [ ] Line: "Smorzo never streams live to your headphones or speakers (Hear yourself plays a short clip once, only when you click Play), and never changes Windows audio settings."
 
 ## 7. README checks
-- [ ] What Sotto does (one paragraph + screenshot).
+- [ ] What Smorzo does (one paragraph + screenshot).
 - [ ] VB-Cable setup steps with a link to the official VB-Audio download page.
-- [ ] Clear statement: Sotto never opens your headphones/speakers and never changes
+- [ ] Clear statement: Smorzo never opens your headphones/speakers and never changes
       default devices or system audio settings; WASAPI shared mode only.
 - [ ] "Official builds only from this repo's Releases" + how to verify SHA-256.
 - [ ] Privacy: no telemetry; only network call is the update check.

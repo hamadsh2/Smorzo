@@ -18,7 +18,7 @@ pub trait Denoiser: Send {
 
     /// Process exactly one frame. Samples are f32 in [-1.0, 1.0].
     ///
-    /// Runs on Sotto's denoise worker thread, never inside a sound-card callback. It
+    /// Runs on Smorzo's denoise worker thread, never inside a sound-card callback. It
     /// must not lock or do I/O, and must return well within the 10 ms frame.
     /// DeepFilterNet hands the frame to its own thread and waits a bounded time for the
     /// answer (see `dfn.rs`).
@@ -309,7 +309,7 @@ mod dfn_stage_probe {
 
     /// DeepFilterNet must not flip between processing modes on a steady voice: with
     /// the library defaults it flipped on ~24% of frames (heard as a "layered",
-    /// unstable voice). Sotto's settings (`dfn::runtime_params`) must keep it steady.
+    /// unstable voice). Smorzo's settings (`dfn::runtime_params`) must keep it steady.
     #[test]
     fn dfn_stage_flips() {
         use df::tract::{DfParams, DfTract};

@@ -1,22 +1,22 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! "App through mic": mix one app's sound (Spotify, a browser, a soundboard…) into
-//! what Sotto sends to CABLE Input, so friends hear it along with your voice.
+//! what Smorzo sends to CABLE Input, so friends hear it along with your voice.
 //!
 //! Windows 10 2004+ can capture the audio of **one process** (and its children) with a
 //! "process loopback": `ActivateAudioInterfaceAsync` on the virtual device
 //! `VAD\Process_Loopback`. It is **read-only**: it opens no stream on any audio device,
 //! plays nothing anywhere and changes no setting. The app keeps playing to your
-//! headphones as usual (that's how you hear it); Sotto only gets a copy.
+//! headphones as usual (that's how you hear it); Smorzo only gets a copy.
 //!
 //! ```text
-//!  app (e.g. Spotify) ─► process loopback ─(sotto-app thread)─► mono ─► ring ─┐
+//!  app (e.g. Spotify) ─► process loopback ─(smorzo-app thread)─► mono ─► ring ─┐
 //!                                                                             ▼
 //!  voice: … → gate → auto gain ──────────────────────────► + app × volume → limiter
 //! ```
 //!
 //! What the copy contains follows the app's own volume and its slider in the Windows
 //! Volume Mixer (measured: +20 dB from Spotify's slider, −6 dB from the mixer), so the
-//! mix has its own volume in Sotto.
+//! mix has its own volume in Smorzo.
 //!
 //! Python analogy: `AppCapture` is a `threading.Thread` filling a `queue.Queue`;
 //! `AppMix` is the consumer that takes 10 ms at a time inside the audio worker.
@@ -50,9 +50,9 @@ use windows::core::{Interface, PWSTR, Ref, implement};
 use crate::denoise::FRAME;
 use crate::engine::SAMPLE_RATE;
 
-/// Never mixed in, by exe name (lower case): Sotto itself (it would feed back into its
+/// Never mixed in, by exe name (lower case): Smorzo itself (it would feed back into its
 /// own output) and voice chat (friends would hear themselves).
-const SOTTO: [&str; 2] = ["sotto.exe", "sotto-cli.exe"];
+const SMORZO: [&str; 4] = ["smorzo.exe", "smorzo-cli.exe", "sotto.exe", "sotto-cli.exe"];
 const VOICE_CHAT: [&str; 6] = [
     "discord.exe",
     "discordptb.exe",
@@ -62,7 +62,7 @@ const VOICE_CHAT: [&str; 6] = [
     "zoom.exe",
 ];
 /// System processes that start other apps. The capture includes the picked app's child
-/// processes, so these would pull in whatever they started (possibly Sotto or Discord).
+/// processes, so these would pull in whatever they started (possibly Smorzo or Discord).
 const LAUNCHERS: [&str; 9] = [
     "explorer.exe",
     "svchost.exe",
@@ -83,15 +83,15 @@ const START_FRAMES: usize = 2;
 /// oldest down to `START_FRAMES`, so the app never lags far behind your voice.
 const MAX_FRAMES: usize = 8;
 
-const NO_SOTTO: &str = "Sotto can't mix its own sound back in";
+const NO_SMORZO: &str = "Smorzo can't mix its own sound back in";
 const NO_CHAT: &str =
     "voice chat (Discord, Teams, Zoom) can't go through your mic: the others would hear themselves";
 
 /// Why this exe can't be picked, if it can't.
 pub fn blocked_reason(exe: &str) -> Option<&'static str> {
     let e = exe.to_ascii_lowercase();
-    if SOTTO.contains(&e.as_str()) {
-        Some(NO_SOTTO)
+    if SMORZO.contains(&e.as_str()) {
+        Some(NO_SMORZO)
     } else if VOICE_CHAT.contains(&e.as_str()) {
         Some(NO_CHAT)
     } else if LAUNCHERS.contains(&e.as_str()) {
@@ -142,15 +142,15 @@ fn is_ancestor_or_self(anc: u32, mut pid: u32, table: &[(u32, u32, String)]) -> 
     false
 }
 
-/// Why capturing `pid` together with its child processes would also capture Sotto or
-/// voice chat (e.g. the picked app started Sotto, or Discord), if it would.
+/// Why capturing `pid` together with its child processes would also capture Smorzo or
+/// voice chat (e.g. the picked app started Smorzo, or Discord), if it would.
 fn tree_conflict(pid: u32, table: &[(u32, u32, String)]) -> Option<&'static str> {
     if is_ancestor_or_self(pid, std::process::id(), table) {
-        return Some(NO_SOTTO);
+        return Some(NO_SMORZO);
     }
     table.iter().find_map(|(p, _, exe)| {
-        let what = if SOTTO.contains(&exe.as_str()) {
-            NO_SOTTO
+        let what = if SMORZO.contains(&exe.as_str()) {
+            NO_SMORZO
         } else if VOICE_CHAT.contains(&exe.as_str()) {
             NO_CHAT
         } else {
@@ -161,9 +161,9 @@ fn tree_conflict(pid: u32, table: &[(u32, u32, String)]) -> Option<&'static str>
 }
 
 /// Whether `app` may be captured right now: not blocked by name, and capturing it with
-/// its child processes wouldn't also capture Sotto or Discord.
+/// its child processes wouldn't also capture Smorzo or Discord.
 /// Called before every start and about once a second while capturing: the app may
-/// start Discord (or another Sotto) at any time, and the capture includes it.
+/// start Discord (or another Smorzo) at any time, and the capture includes it.
 pub fn check(app: &AudioApp) -> Result<(), String> {
     check_with(app, &process_table()?)
 }
@@ -239,7 +239,7 @@ fn exe_name(pid: u32) -> Option<String> {
 
 /// Apps with an audio session on any active playback device, one entry per app (the
 /// session that is playing, if any). Read-only: only lists sessions, opens no stream.
-/// Sotto's own process is left out.
+/// Smorzo's own process is left out.
 pub fn list_apps() -> Result<Vec<AudioApp>, String> {
     let _com = Com::init();
     let own = std::process::id();
@@ -269,7 +269,7 @@ pub fn list_apps() -> Result<Vec<AudioApp>, String> {
                 };
                 let pid = s2.GetProcessId().unwrap_or(0);
                 if pid == 0 || pid == own {
-                    continue; // system sounds, or Sotto itself
+                    continue; // system sounds, or Smorzo itself
                 }
                 let Some(exe) = exe_name(pid) else { continue };
                 let playing = s2.GetState().is_ok_and(|s| s == AudioSessionStateActive);
@@ -389,7 +389,7 @@ pub fn start(
     let (pid, exe, st) = (app.pid, app.exe.clone(), Arc::clone(&stop));
     stats.app_failed.store(false, Relaxed);
     let thread = thread::Builder::new()
-        .name("sotto-app".into())
+        .name("smorzo-app".into())
         .spawn(move || {
             // SAFETY: changes only this thread's priority (same as cpal's audio threads).
             unsafe {
@@ -626,7 +626,9 @@ mod tests {
     use ringbuf::HeapRb;
 
     #[test]
-    fn sotto_and_discord_are_refused() {
+    fn smorzo_and_discord_are_refused() {
+        assert!(blocked_reason("Smorzo.exe").is_some());
+        // Smorzo's old name: an in-app update from v0.4.0 keeps the file name sotto.exe.
         assert!(blocked_reason("Sotto.exe").is_some());
         assert!(blocked_reason("Discord.exe").is_some());
         assert!(blocked_reason("DiscordPTB.exe").is_some());
@@ -636,21 +638,21 @@ mod tests {
     }
 
     #[test]
-    fn a_parent_of_sotto_or_discord_is_refused() {
+    fn a_parent_of_smorzo_or_discord_is_refused() {
         let own = std::process::id();
-        // explorer (10) started a terminal (11) that started Sotto, and Discord (12).
+        // explorer (10) started a terminal (11) that started Smorzo, and Discord (12).
         // Spotify (20) started its own helper (21).
         let table = vec![
             (10, 1, "explorer.exe".to_string()),
             (11, 10, "windowsterminal.exe".to_string()),
-            (own, 11, "sotto-cli.exe".to_string()),
+            (own, 11, "smorzo-cli.exe".to_string()),
             (12, 10, "discord.exe".to_string()),
             (20, 10, "spotify.exe".to_string()),
             (21, 20, "spotify.exe".to_string()),
         ];
-        assert_eq!(tree_conflict(10, &table), Some(NO_SOTTO));
-        assert_eq!(tree_conflict(11, &table), Some(NO_SOTTO));
-        assert_eq!(tree_conflict(own, &table), Some(NO_SOTTO));
+        assert_eq!(tree_conflict(10, &table), Some(NO_SMORZO));
+        assert_eq!(tree_conflict(11, &table), Some(NO_SMORZO));
+        assert_eq!(tree_conflict(own, &table), Some(NO_SMORZO));
         assert_eq!(tree_conflict(12, &table), Some(NO_CHAT));
         assert_eq!(tree_conflict(20, &table), None);
         assert_eq!(tree_conflict(21, &table), None);

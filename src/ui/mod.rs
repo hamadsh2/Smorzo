@@ -2,17 +2,17 @@
 //! The window app: a tray icon, a main window, and the audio engine on its own thread.
 //!
 //! Lifetime rules (CLAUDE.md):
-//! - Closing the main window *hides* it; audio keeps running. "Open Sotto" in the tray
+//! - Closing the main window *hides* it; audio keeps running. "Open Smorzo" in the tray
 //!   shows it again. (GPUI ends the program when its last window is destroyed, and a
 //!   hidden keep-alive window measured +40 MB, so we hide instead.)
 //! - While hidden: Windows never asks a hidden window to paint, and our once-a-second
 //!   refresh skips its redraw, so nothing is drawn and the GPU stays idle.
-//! - Only "Quit Sotto" in the tray ends the program.
+//! - Only "Quit Smorzo" in the tray ends the program.
 //!
 //! Updates (`update.rs`): checked 20 s after start and then daily if allowed; installed
 //! only when the user clicks Install; "Restart" quits cleanly and starts the new exe.
 //!
-//! Settings: loaded from `%APPDATA%\Sotto\settings.toml` before the audio starts, and
+//! Settings: loaded from `%APPDATA%\Smorzo\settings.toml` before the audio starts, and
 //! saved half a second after the last change (and once more on quit).
 
 mod assets;
@@ -40,9 +40,9 @@ use gpui::{
     WindowHandle, WindowOptions, px, size,
 };
 use gpui_component::Root;
-use sotto::control::EngineKind;
-use sotto::params::Params;
-use sotto::settings::{self, SavedDevice, Settings};
+use smorzo::control::EngineKind;
+use smorzo::params::Params;
+use smorzo::settings::{self, SavedDevice, Settings};
 
 use audio::{Audio, Choice};
 use main_window::MainWindow;
@@ -88,7 +88,7 @@ struct AppState {
     settings_path: Option<PathBuf>,
     /// The pending delayed save; replacing it cancels the previous one.
     save_task: Option<Task<()>>,
-    /// Whether Sotto's "Start with Windows" entry exists (the registry is the truth).
+    /// Whether Smorzo's "Start with Windows" entry exists (the registry is the truth).
     autostart: bool,
     /// The global mute shortcut (`None` if Windows wouldn't give us one at all).
     hotkeys: Option<hotkey::Hotkeys>,
@@ -107,7 +107,7 @@ struct Args {
     hidden: bool,
 }
 
-/// `sotto.exe [--input NAME] [--output NAME] [--engine rnnoise|dfn|off] [--hidden]`
+/// `smorzo.exe [--input NAME] [--output NAME] [--engine rnnoise|dfn|off] [--hidden]`
 fn parse_args() -> Args {
     let mut a = Args {
         input: None,
@@ -129,7 +129,7 @@ fn parse_args() -> Args {
 }
 
 pub fn run() {
-    // Only one Sotto: a second copy brings the first one's window up and leaves.
+    // Only one Smorzo: a second copy brings the first one's window up and leaves.
     // `_claim` marks us as running until `run` returns (the app has quit).
     let (_claim, show_signal) = match win::claim_instance() {
         win::Instance::Second => return,
@@ -137,6 +137,10 @@ pub fn run() {
     };
     let args = parse_args();
     let settings_path = settings::default_path();
+    // Smorzo was called Sotto: bring its settings over once (the old file is kept).
+    if let (Some(old), Some(new)) = (settings::old_name_path(), settings_path.as_ref()) {
+        settings::copy_from_old_name(&old, new);
+    }
     let loaded = settings_path
         .as_deref()
         .map(settings::load)
@@ -258,7 +262,7 @@ pub fn run() {
         });
 
     // The app has quit. After an update, start the new version — once this one has
-    // let go of the single-instance lock, so the new one doesn't think Sotto is running.
+    // let go of the single-instance lock, so the new one doesn't think Smorzo is running.
     if RESTART.load(Relaxed) {
         drop(_claim);
         update::relaunch();
@@ -293,7 +297,7 @@ fn set_update(cx: &mut App, state: UpdateState) {
     cx.refresh_windows();
 }
 
-/// Ask GitHub whether a newer Sotto exists (on a background thread).
+/// Ask GitHub whether a newer Smorzo exists (on a background thread).
 pub fn check_updates(cx: &mut App) {
     set_update(cx, UpdateState::Checking);
     cx.spawn(async move |cx| {
@@ -340,7 +344,7 @@ pub fn install_update(cx: &mut App) {
     .detach();
 }
 
-/// Quit and start the updated Sotto.
+/// Quit and start the updated Smorzo.
 pub fn restart(cx: &mut App) {
     RESTART.store(true, Relaxed);
     quit(cx);
@@ -437,11 +441,11 @@ fn open_main(cx: &mut App) {
             cx,
         ))),
         titlebar: Some(TitlebarOptions {
-            title: Some("Sotto".into()),
+            title: Some("Smorzo".into()),
             ..Default::default()
         }),
         is_resizable: false,
-        app_id: Some("Sotto".into()),
+        app_id: Some("Smorzo".into()),
         ..Default::default()
     };
     let handle = cx.open_window(options, |window, cx| {
@@ -453,7 +457,7 @@ fn open_main(cx: &mut App) {
     });
     let st = cx.global_mut::<AppState>();
     st.main = handle.ok();
-    // Sotto has exactly one GPUI window. If a second one is ever added (e.g. About),
+    // Smorzo has exactly one GPUI window. If a second one is ever added (e.g. About),
     // pick the main one explicitly here instead of the first.
     st.main_id = win::gpui_windows().first().copied();
     theme::match_title_bars();

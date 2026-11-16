@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-//! The user's saved choices, as a small TOML file in `%APPDATA%\Sotto\settings.toml`.
+//! The user's saved choices, as a small TOML file in `%APPDATA%\Smorzo\settings.toml`.
 //!
 //! - Loading never fails: a missing file means defaults; a broken one is kept aside as
 //!   `settings.toml.bad` and defaults are used, with a note for the window.
@@ -71,7 +71,7 @@ pub struct Settings {
     pub start_with_windows: bool,
     /// Global mute shortcut as text, e.g. "Ctrl+Alt+M"; empty = none.
     pub mute_hotkey: String,
-    /// Look for a new Sotto at startup and once a day (installing always asks first).
+    /// Look for a new Smorzo at startup and once a day (installing always asks first).
     pub check_updates: bool,
     /// Window colors: "warm-stone" (default), "midnight", "ink-ember" or "paper".
     pub theme: String,
@@ -196,10 +196,31 @@ impl Settings {
     }
 }
 
-/// `%APPDATA%\Sotto\settings.toml`, or `None` if Windows doesn't tell us where
+/// `%APPDATA%\Smorzo\settings.toml`, or `None` if Windows doesn't tell us where
 /// `%APPDATA%` is (then nothing is saved).
 pub fn default_path() -> Option<PathBuf> {
+    directories::BaseDirs::new().map(|d| d.config_dir().join("Smorzo").join("settings.toml"))
+}
+
+/// Where Smorzo kept its settings when it was still called Sotto (v0.4.0 and older).
+pub fn old_name_path() -> Option<PathBuf> {
     directories::BaseDirs::new().map(|d| d.config_dir().join("Sotto").join("settings.toml"))
+}
+
+/// Smorzo used to be called Sotto. On the first start after the rename, copy the old
+/// settings file to the new place, so nothing has to be set up again. The old file is
+/// only read, never changed or deleted (it stays as a backup). Does nothing once the
+/// new file exists. Returns whether it copied.
+pub fn copy_from_old_name(old: &Path, new: &Path) -> bool {
+    if new.exists() || !old.is_file() {
+        return false;
+    }
+    if let Some(dir) = new.parent()
+        && fs::create_dir_all(dir).is_err()
+    {
+        return false;
+    }
+    fs::copy(old, new).is_ok()
 }
 
 pub struct Loaded {
@@ -238,11 +259,11 @@ pub fn load(path: &Path) -> Loaded {
                 settings: Settings::default(),
                 note: Some(if kept {
                     format!(
-                        "Your settings file was damaged, so Sotto started with defaults. The old file is kept as {}.",
+                        "Your settings file was damaged, so Smorzo started with defaults. The old file is kept as {}.",
                         bad.display()
                     )
                 } else {
-                    "Your settings file was damaged, so Sotto started with defaults.".into()
+                    "Your settings file was damaged, so Smorzo started with defaults.".into()
                 }),
             }
         }
@@ -265,9 +286,28 @@ mod tests {
     use super::*;
 
     fn temp_dir(name: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("sotto-test-{name}-{}", std::process::id()));
+        let d = std::env::temp_dir().join(format!("smorzo-test-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&d);
         d
+    }
+
+    #[test]
+    fn old_settings_are_copied_once_and_kept() {
+        let d = temp_dir("rename");
+        let old = d.join("Sotto").join("settings.toml");
+        let new = d.join("Smorzo").join("settings.toml");
+        // Nothing to copy yet.
+        assert!(!copy_from_old_name(&old, &new));
+        fs::create_dir_all(old.parent().unwrap()).unwrap();
+        fs::write(&old, "strength = 0.5\n").unwrap();
+        assert!(copy_from_old_name(&old, &new));
+        assert_eq!(fs::read_to_string(&new).unwrap(), "strength = 0.5\n");
+        assert!(old.is_file(), "the old file stays as a backup");
+        // The new file wins from now on: never overwritten by the old one.
+        fs::write(&new, "strength = 0.9\n").unwrap();
+        assert!(!copy_from_old_name(&old, &new));
+        assert_eq!(fs::read_to_string(&new).unwrap(), "strength = 0.9\n");
+        let _ = fs::remove_dir_all(&d);
     }
 
     #[test]

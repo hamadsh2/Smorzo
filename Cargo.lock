@@ -6876,6 +6876,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dd538fb6910ac1099850255cf94a94df6551fbdd602454387d0adb2d1ca6dead"
 
 [[package]]
+name = "smorzo"
+version = "0.4.0"
+dependencies = [
+ "cpal",
+ "deep_filter",
+ "directories",
+ "global-hotkey",
+ "gpui",
+ "gpui-component",
+ "ndarray",
+ "nnnoiseless",
+ "ringbuf",
+ "self_update",
+ "serde",
+ "sonora",
+ "toml 0.8.23",
+ "tray-icon",
+ "windows 0.62.2",
+ "windows-core 0.62.2",
+]
+
+[[package]]
 name = "socket2"
 version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6959,28 +6981,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f939d8e63a2a0baa7555294d7b09c5e3d382f28358755b920e13ad527658c8fa"
 dependencies = [
  "cpufeatures 0.3.1",
-]
-
-[[package]]
-name = "sotto"
-version = "0.4.0"
-dependencies = [
- "cpal",
- "deep_filter",
- "directories",
- "global-hotkey",
- "gpui",
- "gpui-component",
- "ndarray",
- "nnnoiseless",
- "ringbuf",
- "self_update",
- "serde",
- "sonora",
- "toml 0.8.23",
- "tray-icon",
- "windows 0.62.2",
- "windows-core 0.62.2",
 ]
 
 [[package]]

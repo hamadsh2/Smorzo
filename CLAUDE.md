@@ -1,11 +1,15 @@
-# Sotto — "Just your voice."
+# Smorzo — "Just your voice."
+
+(Renamed from **Sotto** in v0.5.0, 2026-11-16: same app, logo and settings. Migration
+code for the old name — `%APPDATA%\Sotto`, the "Sotto" Run value, the `Sotto.Instance`
+lock, `sotto.exe` in update zips — stays until the user says it can go.)
 
 Lightweight Windows desktop app that cleans the user's microphone in real time and
 writes the result to VB-Cable ("CABLE Input"), which the user selects as their mic in
 Discord, games, and calls. It must stay extremely light while gaming: CPU-only
 processing, zero GPU usage while the window is hidden.
 
-Repo: github.com/hamadsh2/Sotto (public). License: GPL-3.0-only.
+Repo: github.com/hamadsh2/Smorzo (public). License: GPL-3.0-only.
 
 ## Working rules (always follow)
 - Work in phases. **Stop after each phase** so the user can test. Never start the next
@@ -21,10 +25,10 @@ Repo: github.com/hamadsh2/Sotto (public). License: GPL-3.0-only.
   DSP, denoisers), run the `audio-safety-reviewer` subagent before reporting done.
 - At the end of **every phase**, run the `perf-auditor` subagent and report its numbers
   against the performance targets.
-- Load the `sotto-design` skill for any UI, icon, logo, or README-visual work. When the
+- Load the `smorzo-design` skill for any UI, icon, logo, or README-visual work. When the
   user pastes window screenshots, review them against that skill and propose concrete
   fixes (token, spacing, or component names — not vague advice).
-- Load the `sotto-release` skill for anything about versions, tags, CI, or releases.
+- Load the `smorzo-release` skill for anything about versions, tags, CI, or releases.
 - Every source file starts with `// SPDX-License-Identifier: GPL-3.0-only`.
 - If GPUI proves unstable on Windows, **stop and tell the user** before switching to Slint.
 
@@ -44,29 +48,29 @@ Repo: github.com/hamadsh2/Sotto (public). License: GPL-3.0-only.
 - Never open a *live* stream on the user's headphones, speakers, or DAC. No live
   monitoring / "listen to yourself while talking" of any kind (it doubles your voice in
   screen shares and recordings).
-- **Clip-playback exception ("Hear yourself", user-approved 2026-11-13):** Sotto may play
+- **Clip-playback exception ("Hear yourself", user-approved 2026-11-13):** Smorzo may play
   back a short clip of the *cleaned* voice that was recorded into memory, only when the
   user clicks Play, once, then close the stream at once. Never while recording, never
   automatically or on repeat, never to a VB-Audio / Voicemeeter / CABLE device or to the
-  selected Sotto output. The device is the Windows default playback device, resolved to
+  selected Smorzo output. The device is the Windows default playback device, resolved to
   its endpoint ID at the moment of the click; shared mode; no setting is changed. The clip
   is never written to disk.
 - **Echo-reference exception ("Echo removal", user-approved 2026-11-14):** for open-back
-  headphones, Sotto may open a **read-only WASAPI loopback capture** of the headphones
+  headphones, Smorzo may open a **read-only WASAPI loopback capture** of the headphones
   device the user explicitly picked for echo removal (matched by its endpoint ID), shared
   mode, used only as the echo reference. Nothing is ever rendered to that device, no
   setting of it is changed, the reference is never stored, recorded, or sent anywhere.
   Off by default (until the user picks a device); never a VB-Audio / Voicemeeter / CABLE
-  device or the selected Sotto output; if the device disappears, echo removal stops and
+  device or the selected Smorzo output; if the device disappears, echo removal stops and
   reports — never falls back to another device.
-- **App-audio exception ("App through mic", user-approved 2026-11-14):** Sotto may open a
+- **App-audio exception ("App through mic", user-approved 2026-11-14):** Smorzo may open a
   **read-only process-loopback capture** (Windows `ActivateAudioInterfaceAsync` with
   `VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK`) of **one** app the user explicitly picked
   (matched by its executable name), including that app's child processes, to mix that
   app's own sound into the output after the voice chain. It opens no stream on any audio
   device, renders nothing anywhere, changes no setting, and never stores, records, or
-  sends the captured audio anywhere but Sotto's output. Off by default (until the user
-  picks an app and turns it on); never Sotto itself or a voice-chat app (Discord); if the
+  sends the captured audio anywhere but Smorzo's output. Off by default (until the user
+  picks an app and turns it on); never Smorzo itself or a voice-chat app (Discord); if the
   app closes, mixing stops and resumes when it's back — never falls back to another app.
   Enumerating audio sessions (to list apps that are playing) is read-only and allowed.
 - Never change Windows default playback or recording devices; never modify any system
@@ -158,7 +162,7 @@ codegen-units = 1
 - Runtime switching must not glitch: 20–50 ms crossfade plus buffer reset.
 - Use frame-size adapters where engine frame sizes differ from 480.
 
-## UI behavior (not visual design — see `sotto-design` skill for that)
+## UI behavior (not visual design — see `smorzo-design` skill for that)
 - GPUI + gpui-component, English only.
 - Compact single window: engine selector, strength slider, input/output level meters,
   device pickers (input mic + output VB-Cable), chain-stage toggles, live CPU/latency.
@@ -169,7 +173,7 @@ codegen-units = 1
   not destroyed.)
 - No redraws while hidden (zero draws, zero GPU); meters animate only while visible.
 - "Start with Windows": optional, off by default.
-- Settings persisted as TOML in `%APPDATA%\Sotto`.
+- Settings persisted as TOML in `%APPDATA%\Smorzo`.
 
 ## VB-Cable
 - Detect whether VB-Cable is installed (a "CABLE Input" render device exists). If not,
@@ -185,7 +189,7 @@ codegen-units = 1
   only after explicit user approval; verify release signatures.
 - GitHub Actions builds the Windows installer on version tags and publishes the release.
 - Signing keys live only in GitHub Secrets — never committed, never printed in logs.
-- README: what Sotto does, VB-Cable setup, a clear statement that Sotto never touches
+- README: what Smorzo does, VB-Cable setup, a clear statement that Smorzo never touches
   headphones or system audio settings, official builds only from this repo's Releases,
   SHA-256 hashes per release.
 
@@ -198,7 +202,7 @@ codegen-units = 1
 ## Performance targets
 | Metric | Target |
 |---|---|
-| Audio engine RAM, "Light" mode (measure with `sotto-cli`) | < ~15 MB private |
+| Audio engine RAM, "Light" mode (measure with `smorzo-cli`) | < ~15 MB private |
 | Whole app with the UI loaded (window shown or hidden) | < 150 MB private |
 | "Light" mode CPU | < 1% |
 | GPU while window hidden | 0% |
@@ -211,6 +215,6 @@ Measure and report actual numbers at the end of each phase (via `perf-auditor`).
 - Lint: `cargo clippy --all-targets -- -D warnings`
 - Format: `cargo fmt --all`
 - Test: `cargo test`
-- Binaries: `sotto` (window app, `src/main.rs` + `src/ui/`) and `sotto-cli` (typed
-  commands, for testing and measurements, `src/bin/sotto-cli.rs`); both drive the
-  engine through `src/control.rs` in the `sotto` library (`src/lib.rs`).
+- Binaries: `smorzo` (window app, `src/main.rs` + `src/ui/`) and `smorzo-cli` (typed
+  commands, for testing and measurements, `src/bin/smorzo-cli.rs`); both drive the
+  engine through `src/control.rs` in the `smorzo` library (`src/lib.rs`).

@@ -4,7 +4,7 @@
 //! ```text
 //!  mic ─(cpal capture thread)─► downmix to mono ─► raw ring ─┐
 //!                                                            ▼
-//!          Sotto's denoise worker thread: 480-sample frame → processing chain
+//!          Smorzo's denoise worker thread: 480-sample frame → processing chain
 //!          (high-pass → echo removal → denoise → EQ → gate → auto gain → limiter,
 //!          see `dsp.rs`; echo removal takes a reference from `echo.rs`)
 //!                                                            │
@@ -114,7 +114,7 @@ unsafe extern "system" {
     fn SetThreadPriority(thread: *mut core::ffi::c_void, priority: i32) -> i32;
 }
 /// Same priority cpal gives its own audio threads, so a game can't starve denoising.
-/// This changes only Sotto's own thread — no system setting.
+/// This changes only Smorzo's own thread — no system setting.
 const THREAD_PRIORITY_TIME_CRITICAL: i32 = 15;
 
 impl Worker {
@@ -129,7 +129,7 @@ impl Worker {
         let (echo_tx, retired_echo) = mpsc::channel::<Box<EchoRef>>();
         let (app_tx, retired_app) = mpsc::channel::<crate::appaudio::AppMix>();
         let thread = thread::Builder::new()
-            .name("sotto-denoise".into())
+            .name("smorzo-denoise".into())
             .spawn(move || {
                 // SAFETY: GetCurrentThread returns a pseudo-handle for this thread.
                 unsafe { SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL) };

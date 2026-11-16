@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
-//! The Sotto mark drawn in code: a soft wave that calms into a straight line.
+//! The Smorzo mark drawn in code: a soft wave that calms into a straight line.
 //!
-//! It is the same shape as `assets/icon/sotto-mark.svg` (24×24 units, stroke 2, round
+//! It is the same shape as `assets/icon/smorzo-mark.svg` (24×24 units, stroke 2, round
 //! caps). Drawing it here, with no dependencies, lets one file serve two places:
-//! - `build.rs` draws the app icon at every size and embeds it in `sotto.exe`;
+//! - `build.rs` draws the app icon at every size and embeds it in `smorzo.exe`;
 //! - the tray draws its glyph at run time.
 //!
 //! Python analogy: a tiny rasterizer. For every pixel we measure the distance to the

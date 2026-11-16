@@ -8,12 +8,12 @@
 //! a reference-counted pointer that is *not* thread-safe (Python's refcount is protected
 //! by the GIL; Rust has no GIL, so it simply refuses to let an `Rc` cross threads). So
 //! the model can't be built on one thread and handed to another. Instead, a dedicated
-//! "sotto-dfn" thread loads the model and keeps it for its whole life. `DeepFilter`,
+//! "smorzo-dfn" thread loads the model and keeps it for its whole life. `DeepFilter`,
 //! the object the processing chain holds, is a thin proxy that passes each frame to
 //! that thread through two lock-free ring buffers and waits for the answer:
 //!
 //! ```text
-//! denoise worker ──frame──► [ring] ──► sotto-dfn thread (model lives here)
+//! denoise worker ──frame──► [ring] ──► smorzo-dfn thread (model lives here)
 //!        ▲                                        │
 //!        └──────── cleaned frame ◄── [ring] ◄─────┘   (+ unpark the worker)
 //! ```
@@ -120,7 +120,7 @@ impl DeepFilter {
         let (waker_tx, waker_rx) = mpsc::channel::<Thread>();
         let sh = Arc::clone(&shared);
         let join = thread::Builder::new()
-            .name("sotto-dfn".into())
+            .name("smorzo-dfn".into())
             .spawn(move || model_thread(model_in, model_out, sh, ready_tx, waker_rx, post_filter))
             .map_err(|e| format!("could not start DeepFilterNet thread: {e}"))?;
         let model_thread = join.thread().clone();
@@ -149,7 +149,7 @@ impl DeepFilter {
             Ok(Err(e)) => Err(e),
             Err(_) => {
                 // Still stuck inside the library's loader, which can't be interrupted.
-                // Don't wait for it (that would hang Sotto): detach the thread. Drop sets
+                // Don't wait for it (that would hang Smorzo): detach the thread. Drop sets
                 // `quit`, so it exits on its own once loading ends.
                 me.join.take();
                 Err("DeepFilterNet did not finish loading".into())
@@ -298,7 +298,7 @@ fn model_thread(
     };
     if model.sr != 48_000 || model.hop_size != FRAME {
         let _ = ready.send(Err(format!(
-            "DeepFilterNet model expects {} Hz / {}-sample frames; Sotto uses 48000 / {FRAME}",
+            "DeepFilterNet model expects {} Hz / {}-sample frames; Smorzo uses 48000 / {FRAME}",
             model.sr, model.hop_size
         )));
         return;

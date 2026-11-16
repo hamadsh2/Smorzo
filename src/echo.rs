@@ -2,7 +2,7 @@
 //! Echo removal for open-back headphones.
 //!
 //! Open-back headphones leak what you hear (game, friends' voices, music) into the mic.
-//! To remove that leak, the canceller needs to know what was played. Sotto listens to
+//! To remove that leak, the canceller needs to know what was played. Smorzo listens to
 //! the headphones device the user picked through a **read-only WASAPI loopback capture**
 //! (it only reads the mix Windows sends there; nothing is ever played to that device and
 //! none of its settings change) and hands that "reference" to WebRTC's AEC3 echo

@@ -1,5 +1,5 @@
-# cargo-about: which licenses Sotto's dependencies may use (all GPL-3.0-compatible).
-# Generate the list shown in Sotto's About page with:
+# cargo-about: which licenses Smorzo's dependencies may use (all GPL-3.0-compatible).
+# Generate the list shown in Smorzo's About page with:
 #   cargo about generate about.hbs -o assets/THIRD_PARTY_LICENSES.txt
 targets = ["x86_64-pc-windows-msvc"]
 ignore-build-dependencies = false

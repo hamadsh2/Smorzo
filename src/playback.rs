@@ -2,14 +2,14 @@
 //! "Hear yourself": play back a short clip of the cleaned voice, once, when the user
 //! clicks Play.
 //!
-//! This is the one exception to "Sotto never opens a stream on your headphones" (see
+//! This is the one exception to "Smorzo never opens a stream on your headphones" (see
 //! CLAUDE.md, user-approved 2026-11-13), and it is fenced in:
 //! - It plays a clip **recorded earlier** into memory, never live audio, so your voice
 //!   is never doubled in a screen share or recording while you talk.
 //! - It plays only on a click, once, and the stream is closed as soon as the clip ends.
 //! - The device is Windows' default playback device, read **once** at the click and then
 //!   opened by its exact endpoint ID, so it can't follow a later change of default.
-//! - It refuses VB-Audio / Voicemeeter / CABLE devices and Sotto's own output, so the
+//! - It refuses VB-Audio / Voicemeeter / CABLE devices and Smorzo's own output, so the
 //!   clip can never reach a virtual microphone (Discord would hear it).
 //! - Shared mode (cpal's WASAPI default); no setting is changed. Nothing touches disk.
 //!
@@ -37,7 +37,7 @@ pub use crate::devices::is_virtual;
 
 /// Windows' default playback device right now, found again in the enumerated list by
 /// its exact endpoint ID (so the handle is fixed to that device). Refuses virtual
-/// devices and Sotto's own output (`avoid`).
+/// devices and Smorzo's own output (`avoid`).
 pub fn resolve(host: &Host, avoid: Option<&DeviceId>) -> Result<Named, String> {
     let id = devices::no_panic("reading the default device", || {
         host.default_output_device()
@@ -114,7 +114,7 @@ pub fn play(dev: &Named, clip: &[f32]) -> Result<Player, String> {
         .map_err(|e| format!("Couldn't read the playback device's format: {e}"))?;
     if cfg.sample_format() != SampleFormat::F32 {
         return Err(format!(
-            "The playback device uses {:?} audio, which Sotto can't play yet.",
+            "The playback device uses {:?} audio, which Smorzo can't play yet.",
             cfg.sample_format()
         ));
     }

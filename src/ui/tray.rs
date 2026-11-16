@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-//! Tray icon with "Open Sotto", "Mute" and "Quit Sotto" (plus an "Update available"
+//! Tray icon with "Open Smorzo", "Mute" and "Quit Smorzo" (plus an "Update available"
 //! item when there is one).
 //!
 //! tray-icon reports clicks through a callback that Windows calls on the main thread
@@ -42,7 +42,7 @@ thread_local! {
     static MENU: RefCell<Option<Menu>> = const { RefCell::new(None) };
     /// The "Update available" item while it's in the menu.
     static UPDATE_ITEM: RefCell<Option<MenuItem>> = const { RefCell::new(None) };
-    /// Shown in the tooltip when not muted: a newer Sotto is available or installed.
+    /// Shown in the tooltip when not muted: a newer Smorzo is available or installed.
     static UPDATE_TIP: Cell<bool> = const { Cell::new(false) };
     /// What the icon currently shows: (light taskbar, muted).
     static SHOWN: Cell<(bool, bool)> = const { Cell::new((false, false)) };
@@ -85,10 +85,10 @@ pub fn build(cx: &mut App, on_action: fn(Action, &mut App)) -> Result<TrayIcon, 
     let mute = MenuItem::with_id(MUTE_ID, "Mute", true, None);
     let menu = Menu::new();
     menu.append_items(&[
-        &MenuItem::with_id(OPEN_ID, "Open Sotto", true, None),
+        &MenuItem::with_id(OPEN_ID, "Open Smorzo", true, None),
         &mute,
         &PredefinedMenuItem::separator(),
-        &MenuItem::with_id(QUIT_ID, "Quit Sotto", true, None),
+        &MenuItem::with_id(QUIT_ID, "Quit Smorzo", true, None),
     ])
     .map_err(|e| e.to_string())?;
     MUTE_ITEM.with(|m| *m.borrow_mut() = Some(mute));
@@ -99,7 +99,7 @@ pub fn build(cx: &mut App, on_action: fn(Action, &mut App)) -> Result<TrayIcon, 
     TrayIconBuilder::new()
         .with_menu(Box::new(menu))
         .with_menu_on_left_click(false)
-        .with_tooltip("Sotto")
+        .with_tooltip("Smorzo")
         .with_icon(icon(light, false)?)
         .build()
         .map_err(|e| e.to_string())
@@ -119,11 +119,11 @@ pub fn set_muted(tray: &TrayIcon, muted: bool) {
 
 fn set_tooltip(tray: &TrayIcon, muted: bool) {
     let tip = if muted {
-        "Sotto — muted"
+        "Smorzo — muted"
     } else if UPDATE_TIP.with(|u| u.get()) {
-        "Sotto — update available"
+        "Smorzo — update available"
     } else {
-        "Sotto"
+        "Smorzo"
     };
     let _ = tray.set_tooltip(Some(tip));
 }
@@ -138,10 +138,14 @@ pub fn set_update(tray: &TrayIcon, version: Option<&str>) {
         UPDATE_ITEM.with(|i| {
             let mut item = i.borrow_mut();
             match (version, item.as_ref()) {
-                (Some(v), Some(it)) => it.set_text(format!("Sotto {v} is available")),
+                (Some(v), Some(it)) => it.set_text(format!("Smorzo {v} is available")),
                 (Some(v), None) => {
-                    let it =
-                        MenuItem::with_id(UPDATE_ID, format!("Sotto {v} is available"), true, None);
+                    let it = MenuItem::with_id(
+                        UPDATE_ID,
+                        format!("Smorzo {v} is available"),
+                        true,
+                        None,
+                    );
                     if menu.insert(&it, 0).is_ok() {
                         *item = Some(it);
                     }
@@ -175,7 +179,7 @@ fn redraw(tray: &TrayIcon, light: bool, muted: bool) {
     }
 }
 
-/// The Sotto mark as a monochrome glyph: light on a dark taskbar, dark on a light one
+/// The Smorzo mark as a monochrome glyph: light on a dark taskbar, dark on a light one
 /// (the spec's `text_primary` colours for each theme). Muted: the wave flat, slashed.
 fn icon(light: bool, muted: bool) -> Result<Icon, String> {
     const N: u32 = 32;

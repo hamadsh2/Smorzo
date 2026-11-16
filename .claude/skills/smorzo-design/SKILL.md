@@ -1,9 +1,9 @@
 ---
-name: sotto-design
-description: Sotto's branding and design system — color tokens and the four user-selectable themes (Warm stone default, Midnight, Ink & ember, Paper), typography, spacing, radius, elevation, motion, meter behavior, logo/app/tray icon specs, and a screenshot review checklist. Load whenever working on UI (GPUI/gpui-component), icons, the logo, or README visuals, and whenever the user pastes a screenshot of the window.
+name: smorzo-design
+description: Smorzo's branding and design system — color tokens and the four user-selectable themes (Warm stone default, Midnight, Ink & ember, Paper), typography, spacing, radius, elevation, motion, meter behavior, logo/app/tray icon specs, and a screenshot review checklist. Load whenever working on UI (GPUI/gpui-component), icons, the logo, or README visuals, and whenever the user pastes a screenshot of the window.
 ---
 
-# Sotto design system
+# Smorzo design system
 
 **Mood:** calm, minimal, classy, easy on the eyes. One muted accent per theme
 (sage by default), no pure black (`#000`), no pure white (`#FFF`), no gradients, no heavy borders.
@@ -97,7 +97,7 @@ changed palette must still pass it.
 - **Mark:** a single soft sound wave that gradually flattens into a straight line —
   noise becoming calm. Left side: 2–3 gentle oscillations of decreasing amplitude;
   right side: a flat line. Single stroke, round caps and joins, uniform stroke width.
-- Master as SVG (`assets/icon/sotto-mark.svg`), 24×24 viewBox, stroke-based.
+- Master as SVG (`assets/icon/smorzo-mark.svg`), 24×24 viewBox, stroke-based.
 - **App icon:** sage (`#8FA89A`) mark centered on a `#1C1B1A` rounded square
   (corner radius ≈ 22% of size), mark occupying ~60% of width.
   Export `.ico` with sizes 16, 20, 24, 32, 40, 48, 64, 128, 256.
@@ -105,7 +105,7 @@ changed palette must still pass it.
 - **Tray icon:** monochrome mark (follows Windows light/dark taskbar: light glyph on dark
   taskbar, dark glyph on light). **Muted state:** the same mark with the wave fully flat
   plus a small diagonal slash, or reduced opacity — distinct at 16 px.
-- Wordmark: "Sotto" in Inter 600, `text_primary`, slight positive tracking.
+- Wordmark: "Smorzo" in Inter 600, `text_primary`, slight positive tracking.
 - Tagline: "Just your voice." — `text_secondary`.
 
 ## README visuals

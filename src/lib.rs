@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
-//! Sotto's audio engine as a library, shared by the window app (`src/main.rs`) and the
-//! command-line tool (`src/bin/sotto-cli.rs`).
+//! Smorzo's audio engine as a library, shared by the window app (`src/main.rs`) and the
+//! command-line tool (`src/bin/smorzo-cli.rs`).
 
 pub mod appaudio;
 pub mod control;

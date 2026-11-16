@@ -576,7 +576,7 @@ impl Controller {
                 self.app_tried = Some(Instant::now());
             } else if let Some(Err(why)) = self.app_cap.as_ref().map(|c| appaudio::check(&c.app()))
             {
-                // The app started Discord (or another Sotto) while being captured: its
+                // The app started Discord (or another Smorzo) while being captured: its
                 // sound would go out too. Stop now; never switch to another app.
                 self.stop_app();
                 self.notes.push(format!("App through mic stopped: {why}."));
@@ -786,7 +786,7 @@ impl Controller {
     }
 
     /// Play the recorded clip once on Windows' default playback device (never a
-    /// virtual cable or Sotto's own output). See `playback`.
+    /// virtual cable or Smorzo's own output). See `playback`.
     pub fn play(&mut self) -> Result<(), String> {
         if self.recording.is_some() {
             return Err("Still recording.".into());

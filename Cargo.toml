@@ -1,10 +1,10 @@
 [package]
-name = "sotto"
+name = "smorzo"
 version = "0.4.0"
 edition = "2024"
 license = "GPL-3.0-only"
 description = "Just your voice. Lightweight real-time mic noise suppression for Windows."
-repository = "https://github.com/hamadsh2/Sotto"
+repository = "https://github.com/hamadsh2/Smorzo"
 publish = false
 
 [dependencies]
@@ -33,7 +33,7 @@ sonora = "0.3.0"
 # Exclusive-mode output to CABLE Input ("Hide my voice from screen shares"). Same
 # version and features cpal 0.18.2 already builds, so it adds no new code to compile.
 windows = { version = "0.62", features = ["Win32_Media_Audio", "Win32_Foundation", "Win32_Media_KernelStreaming", "Win32_Media_Multimedia", "Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_System_Threading", "Win32_System_Variant", "Win32_Security", "Win32_System_Diagnostics_ToolHelp"] }
-# The core of `windows` (same version, already built into Sotto): needed by its
+# The core of `windows` (same version, already built into Smorzo): needed by its
 # `#[implement]` macro, used once in `appaudio.rs` ("App through mic"). User-approved
 # 2026-11-14.
 windows-core = "=0.62.2"

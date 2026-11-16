@@ -26,13 +26,15 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use cpal::DeviceId;
-use sotto::appaudio;
-use sotto::control::{AppState as AppMix, Change, Chosen, Controller, EchoState, EngineKind, Hear};
-use sotto::devices::{self, Dir};
-use sotto::engine::OutputMode;
-use sotto::params::Params;
-use sotto::settings::SavedDevice;
-use sotto::stats::Stats;
+use smorzo::appaudio;
+use smorzo::control::{
+    AppState as AppMix, Change, Chosen, Controller, EchoState, EngineKind, Hear,
+};
+use smorzo::devices::{self, Dir};
+use smorzo::engine::OutputMode;
+use smorzo::params::Params;
+use smorzo::settings::SavedDevice;
+use smorzo::stats::Stats;
 
 use super::icons;
 
@@ -118,7 +120,7 @@ pub struct AppEntry {
     pub icon: Option<Arc<gpui::Image>>,
 }
 
-/// Icons already read, by lower-case exe name (read once per app, kept while Sotto runs;
+/// Icons already read, by lower-case exe name (read once per app, kept while Smorzo runs;
 /// a few KB each).
 type IconCache = std::collections::HashMap<String, Option<Arc<gpui::Image>>>;
 
@@ -207,7 +209,7 @@ impl Audio {
         let (tx, rx) = mpsc::channel();
         let (st, p) = (Arc::clone(&status), Arc::clone(&params));
         let thread = thread::Builder::new()
-            .name("sotto-control".into())
+            .name("smorzo-control".into())
             .spawn(move || control_loop(choice, p, &st, &rx, &visible))
             .ok();
         if thread.is_none() {

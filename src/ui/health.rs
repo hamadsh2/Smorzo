@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! Mic health hints: notices when the microphone is set too loud (it clips) or too
 //! quiet (even the auto gain can't bring the voice up), so the window can say so
-//! calmly. Sotto never changes the mic level itself; the hint says where to do it.
+//! calmly. Smorzo never changes the mic level itself; the hint says where to do it.
 //!
 //! It only reads counters the audio thread already keeps (`Stats`), on the window's
 //! refresh timer while the window is visible. Pure logic: tested without audio.
@@ -9,7 +9,7 @@
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
-use sotto::dsp::AGC_TARGET_DB;
+use smorzo::dsp::AGC_TARGET_DB;
 
 /// Clipping counts over this much recent time…
 const CLIP_WINDOW: Duration = Duration::from_secs(10);

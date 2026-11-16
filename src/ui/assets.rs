@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-//! The few files the window draws (icons, the Sotto mark), built into the binary so
+//! The few files the window draws (icons, the Smorzo mark), built into the binary so
 //! nothing is read from disk at runtime.
 //!
 //! GPUI asks an `AssetSource` for files by path (e.g. gpui-component's dropdown asks for
@@ -13,8 +13,8 @@ use std::borrow::Cow;
 
 use gpui::{AssetSource, Result, SharedString};
 
-/// The Sotto mark (a wave calming into a line).
-pub const MARK: &str = "icon/sotto-mark.svg";
+/// The Smorzo mark (a wave calming into a line).
+pub const MARK: &str = "icon/smorzo-mark.svg";
 pub const MIC: &str = "icons/mic.svg";
 pub const PLUG: &str = "icons/plug.svg";
 pub const HEADPHONES: &str = "icons/headphones.svg";
@@ -30,7 +30,7 @@ pub const FONTS: [&[u8]; 3] = [
 ];
 
 const FILES: &[(&str, &[u8])] = &[
-    (MARK, include_bytes!("../../assets/icon/sotto-mark.svg")),
+    (MARK, include_bytes!("../../assets/icon/smorzo-mark.svg")),
     (MIC, include_bytes!("../../assets/icons/mic.svg")),
     (PLUG, include_bytes!("../../assets/icons/plug.svg")),
     (

@@ -7,7 +7,7 @@
 //!
 //! Shortcuts are stored as readable text, e.g. "Ctrl+Alt+M", which is also what the
 //! window shows. Every shortcut needs at least one modifier (Ctrl, Alt, Shift or Win),
-//! so Sotto never takes over a plain key you use in a game.
+//! so Smorzo never takes over a plain key you use in a game.
 
 use std::str::FromStr;
 
@@ -53,7 +53,7 @@ impl Hotkeys {
         let new = match text {
             Some(t) if !t.is_empty() => Some((
                 HotKey::from_str(t)
-                    .map_err(|_| format!("\u{201C}{t}\u{201D} isn't a shortcut Sotto can use."))?,
+                    .map_err(|_| format!("\u{201C}{t}\u{201D} isn't a shortcut Smorzo can use."))?,
                 t.to_string(),
             )),
             _ => None,
@@ -159,7 +159,7 @@ mod tests {
 
     #[test]
     fn default_shortcut_parses() {
-        assert!(HotKey::from_str(sotto::settings::MUTE_HOTKEY_DEFAULT).is_ok());
+        assert!(HotKey::from_str(smorzo::settings::MUTE_HOTKEY_DEFAULT).is_ok());
     }
 
     #[test]

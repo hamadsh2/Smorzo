@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! The few Win32 calls the window app needs, declared directly (like `stats.rs` does)
 //! instead of adding a crate: find our own window, hide it, show it again; make sure
-//! only one Sotto runs; and the optional "Start with Windows" entry.
+//! only one Smorzo runs; and the optional "Start with Windows" entry.
 //!
 //! Nothing here touches audio or any system setting. The only thing written outside
-//! Sotto's own window is its own value in the current user's Run key, and only when
+//! Smorzo's own window is its own value in the current user's Run key, and only when
 //! the user turns "Start with Windows" on.
 
 use std::ffi::c_void;
 
-use sotto::instance::{self, Claim, Outcome};
+use smorzo::instance::{self, Claim, Outcome};
 
 type Hwnd = *mut c_void;
 
@@ -36,7 +36,7 @@ unsafe extern "system" {
     ) -> Handle;
     fn OpenEventW(access: u32, inherit: i32, name: *const u16) -> Handle;
     fn SetEvent(h: Handle) -> i32;
-    fn WaitForSingleObject(h: Handle, ms: u32) -> u32;
+    fn WaitForMultipleObjects(count: u32, handles: *const Handle, all: i32, ms: u32) -> u32;
     fn CloseHandle(h: Handle) -> i32;
 }
 
@@ -108,7 +108,7 @@ extern "system" fn collect(hwnd: Hwnd, lparam: isize) -> i32 {
     1 // keep enumerating
 }
 
-/// All GPUI windows of this process (Sotto has exactly one).
+/// All GPUI windows of this process (Smorzo has exactly one).
 pub fn gpui_windows() -> Vec<WindowId> {
     let mut found: Vec<WindowId> = Vec::new();
     // SAFETY: the callback only uses `found` during this call.
@@ -159,31 +159,34 @@ fn wide(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
-// ---- One Sotto at a time ---------------------------------------------------------
+// ---- One Smorzo at a time ---------------------------------------------------------
 //
 // Two copies would both write to CABLE Input. The first copy holds the shared lock
-// (`sotto::instance`, also used by `sotto-cli`) and a "show" event. A second app copy
+// (`smorzo::instance`, also used by `smorzo-cli`) and a "show" event. A second app copy
 // signals that event (so the first one's window comes up) and exits. If the lock is
-// held but there is no show event, `sotto-cli` is the one running: say so and exit.
+// held but there is no show event, `smorzo-cli` is the one running: say so and exit.
 
-const SHOW_EVENT: &str = r"Local\Sotto.Show";
+const SHOW_EVENT: &str = r"Local\Smorzo.Show";
+/// The show event of a running Sotto (Smorzo's old name, v0.4.0 and older).
+const OLD_SHOW_EVENT: &str = r"Local\Sotto.Show";
 const EVENT_MODIFY_STATE: u32 = 0x0002;
 const WAIT_OBJECT_0: u32 = 0;
 const INFINITE: u32 = u32::MAX;
 const MB_OK: u32 = 0x0000_0000;
 const MB_ICONINFORMATION: u32 = 0x0000_0040;
 
-/// The "show yourself" event of the first copy, as a plain number (sendable).
+/// The "show yourself" events of the first copy, as plain numbers (sendable): Smorzo's
+/// own, and the old Sotto one (so an old Sotto started later brings this window up).
 #[derive(Clone, Copy)]
-pub struct ShowSignal(isize);
+pub struct ShowSignal([isize; 2], u32);
 
 pub enum Instance {
-    /// We are the only Sotto. Keep the claim alive while running. The signal is `None`
+    /// We are the only Smorzo. Keep the claim alive while running. The signal is `None`
     /// if the show event couldn't be made (a second copy still exits; it just can't
     /// bring this window up).
     First(Option<Claim>, Option<ShowSignal>),
-    /// Another Sotto is running; it has been asked to show its window, or the user
-    /// has been told that sotto-cli is running.
+    /// Another Smorzo is running; it has been asked to show its window, or the user
+    /// has been told that smorzo-cli is running.
     Second,
 }
 
@@ -192,16 +195,20 @@ pub fn claim_instance() -> Instance {
         Outcome::Alone(c) => Some(c),
         Outcome::Unknown => None, // can't tell; don't block starting
         Outcome::Taken => {
-            let ev_name = wide(SHOW_EVENT);
+            let (ev_name, old_name) = (wide(SHOW_EVENT), wide(OLD_SHOW_EVENT));
             // SAFETY: plain Win32 calls with valid zero-terminated strings.
             unsafe {
-                let ev = OpenEventW(EVENT_MODIFY_STATE, 0, ev_name.as_ptr());
+                let mut ev = OpenEventW(EVENT_MODIFY_STATE, 0, ev_name.as_ptr());
+                if ev.is_null() {
+                    // An old Sotto is running: bring its window up instead.
+                    ev = OpenEventW(EVENT_MODIFY_STATE, 0, old_name.as_ptr());
+                }
                 if ev.is_null() {
                     let text = wide(
-                        "sotto-cli is running and using your microphone and CABLE Input.\n\n\
-                         Close it first, then open Sotto again.",
+                        "smorzo-cli (or an old sotto-cli) is running and using your microphone \
+                         and CABLE Input.\n\nClose it first, then open Smorzo again.",
                     );
-                    let title = wide("Sotto");
+                    let title = wide("Smorzo");
                     MessageBoxW(
                         std::ptr::null_mut(),
                         text.as_ptr(),
@@ -216,31 +223,45 @@ pub fn claim_instance() -> Instance {
             return Instance::Second;
         }
     };
-    let ev_name = wide(SHOW_EVENT);
-    // SAFETY: valid zero-terminated name. The event stays open for the life of the
-    // process; Windows closes it when we exit. Auto-reset: each SetEvent wakes the
-    // waiter once.
-    let ev = unsafe { CreateEventW(std::ptr::null(), 0, 0, ev_name.as_ptr()) };
-    Instance::First(claim, (!ev.is_null()).then_some(ShowSignal(ev as isize)))
+    let mut events = [0isize; 2];
+    let mut n = 0;
+    for name in [SHOW_EVENT, OLD_SHOW_EVENT] {
+        let name = wide(name);
+        // SAFETY: valid zero-terminated name. The event stays open for the life of the
+        // process; Windows closes it when we exit. Auto-reset: each SetEvent wakes the
+        // waiter once.
+        let ev = unsafe { CreateEventW(std::ptr::null(), 0, 0, name.as_ptr()) };
+        if !ev.is_null() {
+            events[n] = ev as isize;
+            n += 1;
+        }
+    }
+    Instance::First(claim, (n > 0).then_some(ShowSignal(events, n as u32)))
 }
 
 impl ShowSignal {
     /// Block until a second copy asks us to show. Run it off the UI thread.
     pub fn wait(self) -> bool {
-        // SAFETY: the event handle stays open for the life of the process.
-        unsafe { WaitForSingleObject(self.0 as Handle, INFINITE) == WAIT_OBJECT_0 }
+        let handles = self.0.map(|h| h as Handle);
+        // SAFETY: the first `self.1` handles are open events that stay open for the life
+        // of the process.
+        let r = unsafe { WaitForMultipleObjects(self.1, handles.as_ptr(), 0, INFINITE) };
+        // WAIT_OBJECT_0 is 0: results 0..n mean "event i was signaled".
+        (WAIT_OBJECT_0..WAIT_OBJECT_0 + self.1).contains(&r)
     }
 }
 
 // ---- Start with Windows ----------------------------------------------------------
 //
 // One value under the current user's Run key (no admin rights, no other user, no
-// system setting): Windows starts `"…\sotto.exe" --hidden` at sign-in. Off by default;
+// system setting): Windows starts `"…\smorzo.exe" --hidden` at sign-in. Off by default;
 // only the user's switch adds or removes it.
 
 const HKEY_CURRENT_USER: isize = 0x8000_0001u32 as i32 as isize;
 const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
-const RUN_VALUE: &str = "Sotto";
+const RUN_VALUE: &str = "Smorzo";
+/// The value Smorzo used when it was still called Sotto (v0.4.0 and older).
+const OLD_RUN_VALUE: &str = "Sotto";
 const REG_SZ: u32 = 1;
 const RRF_RT_REG_SZ: u32 = 0x0000_0002;
 
@@ -250,9 +271,14 @@ fn autostart_command() -> Option<String> {
     Some(format!("\"{}\" --hidden", exe.display()))
 }
 
-/// Sotto's current "Start with Windows" command, if it has one.
+/// Smorzo's current "Start with Windows" command, if it has one.
 fn autostart_value() -> Option<String> {
-    let (key, value) = (wide(RUN_KEY), wide(RUN_VALUE));
+    run_value(RUN_VALUE)
+}
+
+/// The command stored under `name` in the Run key, if there is one.
+fn run_value(name: &str) -> Option<String> {
+    let (key, value) = (wide(RUN_KEY), wide(name));
     let mut buf = [0u16; 1024];
     let mut len = (buf.len() * 2) as u32;
     // SAFETY: reads at most `len` bytes into `buf`; names are zero-terminated.
@@ -276,15 +302,25 @@ fn autostart_value() -> Option<String> {
     Some(String::from_utf16_lossy(&buf[..n.min(buf.len())]))
 }
 
-/// Whether Sotto is set to start with Windows (any Sotto entry counts).
+/// Whether Smorzo is set to start with Windows (any Smorzo entry counts).
 pub fn autostart_enabled() -> bool {
     autostart_value().is_some()
 }
 
-/// If "Start with Windows" is on but points somewhere else (Sotto was moved or
-/// updated to a new folder), point it at this exe. Only ever rewrites Sotto's own
+/// If "Start with Windows" is on but points somewhere else (Smorzo was moved or
+/// updated to a new folder), point it at this exe. Only ever rewrites Smorzo's own
 /// value, and only when it is already there.
+///
+/// Smorzo used to be called Sotto: if the old "Sotto" value is there, "Start with
+/// Windows" was on, so it is moved to the "Smorzo" value (pointing at this exe) and the
+/// old one is removed. Nothing else in the Run key is touched.
 pub fn refresh_autostart() {
+    // Only the value Sotto itself wrote (`"…\sotto.exe" --hidden`), never someone
+    // else's entry that happens to be called "Sotto".
+    let ours = |cmd: &str| cmd.to_ascii_lowercase().ends_with("sotto.exe\" --hidden");
+    if run_value(OLD_RUN_VALUE).is_some_and(|c| ours(&c)) && set_autostart(true).is_ok() {
+        let _ = delete_run_value(OLD_RUN_VALUE);
+    }
     if let (Some(now), Some(want)) = (autostart_value(), autostart_command())
         && now != want
     {
@@ -295,7 +331,7 @@ pub fn refresh_autostart() {
 pub fn set_autostart(on: bool) -> Result<(), String> {
     let (key, value) = (wide(RUN_KEY), wide(RUN_VALUE));
     let r = if on {
-        let cmd = autostart_command().ok_or("couldn't find Sotto's own path")?;
+        let cmd = autostart_command().ok_or("couldn't find Smorzo's own path")?;
         let data = wide(&cmd);
         // SAFETY: data is a zero-terminated UTF-16 string and `len` is its size in
         // bytes, including the terminator, as REG_SZ requires.
@@ -310,15 +346,23 @@ pub fn set_autostart(on: bool) -> Result<(), String> {
             )
         }
     } else {
-        // SAFETY: deletes only our own value; "not found" counts as done.
-        let r =
-            unsafe { RegDeleteKeyValueW(HKEY_CURRENT_USER as Hkey, key.as_ptr(), value.as_ptr()) };
-        if r == 2 { 0 } else { r } // ERROR_FILE_NOT_FOUND
+        return delete_run_value(RUN_VALUE);
     };
     if r == 0 {
         Ok(())
     } else {
         Err(format!("Windows refused the change (error {r})"))
+    }
+}
+
+/// Remove one of our own values (`Smorzo`, or the old `Sotto`) from the Run key.
+fn delete_run_value(name: &str) -> Result<(), String> {
+    let (key, value) = (wide(RUN_KEY), wide(name));
+    // SAFETY: deletes only the named value; "not found" counts as done.
+    let r = unsafe { RegDeleteKeyValueW(HKEY_CURRENT_USER as Hkey, key.as_ptr(), value.as_ptr()) };
+    match r {
+        0 | 2 => Ok(()), // ERROR_FILE_NOT_FOUND
+        r => Err(format!("Windows refused the change (error {r})")),
     }
 }
 

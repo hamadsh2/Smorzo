@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-//! Build step: give `sotto.exe` its icon.
+//! Build step: give `smorzo.exe` its icon.
 //!
 //! Draws the app icon at every size Windows asks for (with the same code the tray uses,
 //! `src/ui/mark.rs`), packs the images into a Windows resource file (`.res`) and hands
@@ -32,12 +32,12 @@ fn main() {
         return;
     }
     let out = PathBuf::from(std::env::var("OUT_DIR").expect("cargo sets OUT_DIR"));
-    let res = out.join("sotto-icon.res");
+    let res = out.join("smorzo-icon.res");
     std::fs::write(&res, icon_res()).expect("write icon resource");
     // The same icon as a .ico file, for the installer (CI picks it up from OUT_DIR).
-    std::fs::write(out.join("sotto.ico"), icon_file()).expect("write icon file");
+    std::fs::write(out.join("smorzo.ico"), icon_file()).expect("write icon file");
     // link.exe accepts .res files as inputs. Only the window app gets the icon.
-    println!("cargo:rustc-link-arg-bin=sotto={}", res.display());
+    println!("cargo:rustc-link-arg-bin=smorzo={}", res.display());
 }
 
 /// One icon image in the classic DIB format: a BITMAPINFOHEADER (height doubled, as

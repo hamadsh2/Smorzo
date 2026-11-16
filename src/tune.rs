@@ -78,7 +78,7 @@ impl Failure {
         match self {
             Failure::NoAudio => "No sound came from your microphone. Check that it's running.",
             Failure::NoVoice => {
-                "Sotto didn't hear enough of your voice. Try again and keep talking."
+                "Smorzo didn't hear enough of your voice. Try again and keep talking."
             }
         }
     }

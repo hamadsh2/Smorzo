@@ -15,7 +15,7 @@ pub struct Params {
     pub agc: AtomicBool,
     pub limiter: AtomicBool,
     /// Mute: the output fades to silence (10 ms) while the streams keep running, so
-    /// unmuting is instant. Not saved: Sotto always starts unmuted.
+    /// unmuting is instant. Not saved: Smorzo always starts unmuted.
     pub muted: AtomicBool,
     /// Wet/dry mix of the denoise engine, 0.0..=1.0.
     strength: AtomicU32,
