@@ -47,7 +47,7 @@ use super::audio::{AppEntry, Command, Device, State, Status};
 use super::health::{Health, Hints};
 use super::licenses::{self, License};
 use super::meter::{self, Meter};
-use super::theme::*;
+use super::theme::{set as set_theme, *};
 use super::{
     AppState, UpdateState, check_updates, hotkey, install_update, restart, save_soon, toggle_mute,
 };
@@ -2035,7 +2035,7 @@ fn segmented(
                 .cursor_pointer()
                 .map(|d| {
                     if selected {
-                        d.bg(c(ACCENT)).text_color(c(BG))
+                        d.bg(c(ACCENT)).text_color(c(ON_ACCENT))
                     } else {
                         d.text_color(c(TEXT_SECONDARY))
                             .hover(|s| s.bg(c(ELEVATED)).text_color(c(TEXT_PRIMARY)))
@@ -2219,7 +2219,7 @@ fn button(id: &'static str, label: &'static str, primary: bool) -> gpui::Statefu
             if primary {
                 d.border_color(c(ACCENT))
                     .bg(c(ACCENT))
-                    .text_color(c(BG))
+                    .text_color(c(ON_ACCENT))
                     .font_weight(FontWeight::MEDIUM)
                     .hover(|d| d.bg(c(ACCENT_HOVER)).border_color(c(ACCENT_HOVER)))
             } else {
@@ -2672,6 +2672,7 @@ impl MainWindow {
             .child(section("Voice", voice))
             .child(section("App through mic", self.app_settings(cx)))
             .child(section("Shortcut", vec![self.shortcut_row(cx)]))
+            .child(section("Appearance", vec![theme_row()]))
             .child(section(
                 "App",
                 vec![
@@ -2690,6 +2691,40 @@ enum Page {
     Main,
     Settings,
     About,
+}
+
+/// Settings → Appearance: the window's colors. Applies at once and is saved.
+fn theme_row() -> AnyElement {
+    let now = current();
+    div()
+        .flex()
+        .flex_col()
+        .gap(SP_8)
+        .py(SP_12)
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .child("Theme")
+                .child(caption("Only the window's colors change.")),
+        )
+        .child(segmented(
+            ThemeName::ALL.into_iter().map(move |t| {
+                (
+                    SharedString::from(format!("theme-{}", t.id())),
+                    t.label(),
+                    t == now,
+                    Box::new(move |cx: &mut App| {
+                        set_theme(t, cx);
+                        cx.global_mut::<AppState>().settings.theme = t.id().into();
+                        save_soon(cx);
+                    }) as Box<dyn Fn(&mut App)>,
+                )
+            }),
+            LABEL,
+            28.0,
+        ))
+        .into_any_element()
 }
 
 /// A titled group of rows on the Settings page.

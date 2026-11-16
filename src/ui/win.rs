@@ -40,6 +40,11 @@ unsafe extern "system" {
     fn CloseHandle(h: Handle) -> i32;
 }
 
+#[link(name = "dwmapi")]
+unsafe extern "system" {
+    fn DwmSetWindowAttribute(hwnd: Hwnd, attr: u32, value: *const c_void, size: u32) -> i32;
+}
+
 #[link(name = "advapi32")]
 unsafe extern "system" {
     fn RegSetKeyValueW(
@@ -109,6 +114,22 @@ pub fn gpui_windows() -> Vec<WindowId> {
     // SAFETY: the callback only uses `found` during this call.
     unsafe { EnumWindows(collect, &mut found as *mut Vec<WindowId> as isize) };
     found
+}
+
+/// Draw our own window's title bar dark or light, to match the theme. Only this
+/// window's frame changes; no Windows setting is touched.
+pub fn set_dark_title_bar(w: WindowId, dark: bool) {
+    const DWMWA_USE_IMMERSIVE_DARK_MODE: u32 = 20;
+    let value: i32 = dark.into();
+    // SAFETY: our own window; the value outlives the call.
+    unsafe {
+        DwmSetWindowAttribute(
+            w.hwnd(),
+            DWMWA_USE_IMMERSIVE_DARK_MODE,
+            (&raw const value).cast(),
+            size_of::<i32>() as u32,
+        )
+    };
 }
 
 pub fn exists(w: WindowId) -> bool {

@@ -161,12 +161,14 @@ pub fn run() {
         note: loaded.note,
     };
     let hidden = args.hidden;
+    let start_theme = theme::ThemeName::from_id(&s.theme);
 
     Application::new()
         .with_assets(assets::Assets)
         .run(move |cx: &mut App| {
             gpui_component::init(cx);
             theme::load_fonts(cx);
+            theme::init(start_theme);
             theme::apply(cx);
 
             let visible = Arc::new(AtomicBool::new(!hidden));
@@ -454,6 +456,7 @@ fn open_main(cx: &mut App) {
     // Sotto has exactly one GPUI window. If a second one is ever added (e.g. About),
     // pick the main one explicitly here instead of the first.
     st.main_id = win::gpui_windows().first().copied();
+    theme::match_title_bars();
 }
 
 /// Close button / Alt+F4: hide instead of closing. Returns whether to really close.

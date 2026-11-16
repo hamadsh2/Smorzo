@@ -1,49 +1,55 @@
 ---
 name: sotto-design
-description: Sotto's branding and design system — color tokens (dark/light), typography, spacing, radius, elevation, motion, meter behavior, logo/app/tray icon specs, and a screenshot review checklist. Load whenever working on UI (GPUI/gpui-component), icons, the logo, or README visuals, and whenever the user pastes a screenshot of the window.
+description: Sotto's branding and design system — color tokens and the four user-selectable themes (Warm stone default, Midnight, Ink & ember, Paper), typography, spacing, radius, elevation, motion, meter behavior, logo/app/tray icon specs, and a screenshot review checklist. Load whenever working on UI (GPUI/gpui-component), icons, the logo, or README visuals, and whenever the user pastes a screenshot of the window.
 ---
 
 # Sotto design system
 
-**Mood:** calm, minimal, classy, easy on the eyes. Warm neutrals, one muted accent
-(sage), no pure black (`#000`), no pure white (`#FFF`), no gradients, no heavy borders.
+**Mood:** calm, minimal, classy, easy on the eyes. One muted accent per theme
+(sage by default), no pure black (`#000`), no pure white (`#FFF`), no gradients, no heavy borders.
 
 **Rule zero:** every color, size, radius, and duration comes from a token defined here.
 Define tokens first (one `theme` module), then apply them everywhere. Never leave a
 gpui-component on its default styling, and never hard-code a hex value in a component.
 
-## Color tokens
+## Color tokens and themes
 
-| Token | Dark (default) | Light | Use |
-|---|---|---|---|
-| `bg` | `#1C1B1A` | `#F4F1EA` | Window background |
-| `surface` | `#252422` | `#FBF9F5` | Panels, cards |
-| `elevated` | `#2E2C29` | *not specified — ask the user* | Popovers, dropdowns, hover fills |
-| `border` | `#3A3733` | `#E2DDD3` | Hairline dividers only (1px) |
-| `text_primary` | `#E8E4DC` | `#2B2925` | Body text, values |
-| `text_secondary` | `#A39E94` | `#6E695F` | Labels, captions, hints |
-| `accent` | `#8FA89A` | `#6F8C7E` | Active toggles, slider fill, focus ring, selected item |
-| `accent_hover` | `#A3BBAE` | *not specified — ask the user* | Hover on accent elements |
-| `meter_peak` | `#C9B79C` | `#B09A78` | Meter peak-hold marker / hot zone |
-| `warning` | `#C48A72` | `#B0705A` | Calm warnings (VB-Cable default device, missing device) |
+The user picks a theme in *Settings → Appearance*; **Warm stone is the default**. All
+four use the same tokens, defined once in `src/ui/theme.rs` (`PALETTES`). Components ask
+for a token with `c(ACCENT)` and never for a hex. The test
+`every_theme_keeps_text_readable` checks the contrast of every theme, so a new or
+changed palette must still pass it.
 
-Meter body uses `accent`; the peak-hold tick and the top ~10% of the scale use
-`meter_peak`. Muted state uses `text_secondary` (desaturated), never red.
+| Token | Warm stone (default) | Midnight | Ink & ember | Paper (light) | Use |
+|---|---|---|---|---|---|
+| `bg` | `#1C1B1A` | `#121519` | `#171412` | `#F4F1EA` | Window background |
+| `surface` | `#252422` | `#1A1E24` | `#211D1A` | `#FBF9F5` | Panels, cards |
+| `elevated` | `#2E2C29` | `#252B34` | `#2C2622` | `#ECE7DE` | Popovers, hover fills, selected chip |
+| `border` | `#3A3733` | `#313844` | `#3A332D` | `#DDD7CC` | Hairlines (1px), off switch track |
+| `text_primary` | `#E8E4DC` | `#E4E8EE` | `#EEE6DC` | `#2B2925` | Body text, values |
+| `text_secondary` | `#A39E94` | `#98A1AE` | `#ABA094` | `#66615A` | Labels, captions, hints |
+| `accent` | `#8FA89A` | `#7FB3C4` | `#D49A6A` | `#557263` | Active toggles, slider fill, focus ring, selected item, the mark in the header |
+| `accent_hover` | `#A3BBAE` | `#97C3D1` | `#DFAE85` | `#4A6557` | Hover on accent elements |
+| `on_accent` | `#1C1B1A` | `#121519` | `#171412` | `#FBF9F5` | Text on an accent fill (selected segment, primary button) |
+| `meter_peak` | `#C9B79C` | `#D9B97E` | `#E6CC9A` | `#8F7650` | Meter peak-hold marker / hot zone |
+| `warning` | `#C48A72` | `#D08C76` | `#D47F74` | `#A4634E` | Calm warnings |
 
-### Measured contrast (WCAG 2.x)
+**Theme rules:**
+- The meter body uses `accent`. The peak-hold tick and the top ~10% of the scale use `meter_peak`.
+- The muted state uses `text_secondary`, never red.
+- The window's own title bar follows the theme: dark for the dark themes, light for Paper (`theme::match_title_bars`).
+- The app icon and tray icon do **not** follow the theme. The app icon is always the sage mark on `#1C1B1A`. The tray icon follows the taskbar.
 
-| Pair | Dark | Light | Verdict |
-|---|---|---|---|
-| text_primary on bg / surface | 13.6 / 12.2 | 12.9 / 13.8 | AA ✅ |
-| text_secondary on bg / surface | 6.5 / 5.8 | 4.8 / 5.2 | AA ✅ |
-| accent on bg / surface | 6.7 / 6.1 | **3.3 / 3.5** | Dark ✅ · Light: UI-only (≥3:1), **not for body text** |
-| warning on bg / surface | 5.9 / 5.3 | **3.5 / 3.8** | Dark ✅ · Light: icon/border only, pair with text_primary text |
-| meter_peak on bg / surface | 8.8 / 7.9 | **2.4 / 2.6** | Light fails 3:1 for graphics — open issue, ask user |
+**Contrast:** the minimums below are enforced by the test.
 
-Rules from this: in light theme, never render text in `accent` or `warning`; use
-`text_primary` for the message and the token color for an icon, dot, or left rule.
-Text on an accent fill: dark theme use `bg` on `accent` (6.7:1); light theme use
-`text_primary` on `accent` (4.0:1 — large/bold text only).
+| Pair | Minimum (all themes) |
+|---|---|
+| `text_primary` on bg / surface / elevated | 7:1 |
+| `text_secondary` on bg / surface / elevated | 4.5:1 |
+| `accent`, `meter_peak` and `warning` on bg / surface | 3:1 (UI graphics) |
+| `on_accent` on `accent` | 4.5:1 |
+
+**Text color in Paper:** `accent` and `warning` are graphics-only, so never render body text in them. Use `text_primary` for the message, and the token color for an icon, a dot or a left rule.
 
 ## Typography
 - **Font:** Inter, embedded in the binary (SIL OFL 1.1 — include its license in the

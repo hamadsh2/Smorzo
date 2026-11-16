@@ -73,6 +73,8 @@ pub struct Settings {
     pub mute_hotkey: String,
     /// Look for a new Sotto at startup and once a day (installing always asks first).
     pub check_updates: bool,
+    /// Window colors: "warm-stone" (default), "midnight", "ink-ember" or "paper".
+    pub theme: String,
 }
 
 impl Default for Settings {
@@ -103,6 +105,7 @@ impl Default for Settings {
             start_with_windows: false,
             mute_hotkey: MUTE_HOTKEY_DEFAULT.into(),
             check_updates: true,
+            theme: "warm-stone".into(),
         };
         // One source of truth for the defaults: a fresh `Params`.
         s.read_params(&p);
